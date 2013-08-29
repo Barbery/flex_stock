@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:NavigatorContent xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:comp="components.*" keyDown="_keyDownHandler(event)"
+					xmlns:s="library://ns.adobe.com/flex/spark" show="init()" hide="__distruct()"
+					xmlns:mx="library://ns.adobe.com/flex/mx" >
+	<s:layout>
+		<s:HorizontalLayout gap="0" />
+	</s:layout>
+	
+	<fx:Declarations>
+
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+		/**
+		 * 指数和股票处理的中间件
+		 */
+			
+			
+			[Bindable]
+			private var _stockCode:int;
+
+			public function init():void
+			{
+				//leftSide.width = this.width-254;
+				checkIsStock();
+				this.setFocus();
+			}
+
+			
+			private function _keyDownHandler(event:KeyboardEvent):void
+			{
+				
+				if ( this.parentApplication.isLoadSearch || leftSide.selectedIndex !== 1 )
+					return;
+				
+				switch(event.keyCode)
+				{
+					case 38:
+						kline._less();
+						break;
+					case 40:
+						kline._more();
+						break;
+				}
+			}
+			
+			public function refresh():void
+			{
+				checkIsStock();
+				switch( leftSide.selectedIndex )
+				{
+					case 0:
+						fsline.init();
+						break;
+					case 1:
+						kline.init();
+						break;
+				}
+			}
+			
+			public function changeToKline():void
+			{
+				checkIsStock();
+				if(leftSide.selectedIndex === 1)
+				{
+					kline.init();
+				}
+				else
+				{
+					leftSide.selectedIndex = 1;
+				}
+				
+			}
+			
+			public function changeToFSline():void
+			{
+				
+				checkIsStock();
+				if(leftSide.selectedIndex === 0)
+				{
+					fsline.init();
+				}
+				else
+				{
+					leftSide.selectedIndex = 0;
+				}
+			}
+
+			
+			private function checkIsStock():void
+			{
+				_stockCode = this.parentApplication.stockCode;
+				//						主板														中小																创业																沪B															深B
+				if( (_stockCode >= 600000 && _stockCode <= 699999) || (_stockCode >= 1000000 && _stockCode <= 1009999) || (_stockCode >= 1300000 && _stockCode <= 1300999) || (_stockCode >= 900000 && _stockCode <= 901000) || (_stockCode >= 200000 && _stockCode <= 201000) )
+				{
+					rightSide.selectedIndex = 0;
+					return;
+				}
+				rightSide.selectedIndex = 1;
+				
+			}
+			
+			private function __distruct():void
+			{
+				fsline.__distruct();
+				this.removeEventListener(KeyboardEvent.KEY_DOWN , _keyDownHandler );
+			}
+			
+		]]>
+	</fx:Script>
+	<s:Group width="100%" height="100%">
+		<mx:ViewStack id="leftSide" selectedIndex="0" height="100%" width="100%"  backgroundColor="0x0A0A0A" creationPolicy="auto" >
+			<comp:test_fsline id="fsline" width="100%" height="100%" />
+			<comp:test_kline id="kline" width="{this.width}" />
+		</mx:ViewStack>
+	</s:Group>
+	
+	<s:Spacer width="4" />
+	<s:BorderContainer width="250"  borderColor="red" height="100%">
+		<mx:ViewStack id="rightSide" selectedIndex="0" height="100%" width="100%"  backgroundColor="0x0A0A0A" creationPolicy="auto"  >
+			
+			<s:NavigatorContent height="100%" width="250">
+				<s:layout>
+					<s:VerticalLayout gap="0" />
+				</s:layout>
+				<comp:buy_sell maxHeight="384" code="{_stockCode}" />
+				<s:Label backgroundColor="red" width="250" height="1" text=" " />
+				
+				<comp:financial_data height="70" code="{_stockCode}" />
+				<s:Label backgroundColor="red" width="250" height="1" text=" " />
+				
+				<s:Spacer height="2" />
+				<comp:tran_list code="{_stockCode}" />
+			
+			</s:NavigatorContent>
+			<!-- <comp:stockRightSide /> -->
+				
+			<s:NavigatorContent height="100%" width="250">
+				<s:layout>
+					<s:VerticalLayout gap="0" />
+				</s:layout>
+				
+				<comp:index_tran code="{_stockCode}" height="156" />
+				<s:Label backgroundColor="red" width="250" height="1" text=" " />
+				
+				<comp:index_info height="250" />
+				<s:Label backgroundColor="red" width="250" height="1" text=" " />
+				
+				<comp:index_up_down_num height="60" />
+				<s:Label backgroundColor="red" width="250" height="1" text=" " />
+				
+				<comp:tran_list code="{_stockCode}" />
+				
+			</s:NavigatorContent>
+			
+		</mx:ViewStack>
+	</s:BorderContainer>
+</s:NavigatorContent>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009"
+				xmlns:s="library://ns.adobe.com/flex/spark"
+				xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:comp="components.*"
+				width="100%" height="22" autoDrawBackground="true">
+	<s:layout>
+		<s:HorizontalLayout/>
+	</s:layout>
+	<fx:Script>
+		<![CDATA[
+			[Bindable]
+			private var tap:Boolean;
+			[Bindable]
+			private var amount:String;
+			[Bindable]
+			private var _style:String;
+
+			override public function set data( value:Object ) : void {
+				super.data = value;
+				tap =  this.parentApplication.parameters['tap'] ;
+				
+				
+				if( this.parentApplication.parameters[ data.stockCode ] == null ){
+					_style = 'normal';
+				}else{
+					_style = 'mystock';
+				}
+				
+			}
+
+
+			//序号      代码     名称       最新价↓   涨幅    成交额    换手率    主力净买    跟风净买    散户净买    资金净买   5日主力   10日主力    20日主力
+			//序号	  代码	  名称	  主力净买	  涨幅	  最新	  所属板块	   昨收	  委比  	量比  	换手  	5日净买	    三日涨幅	  周涨幅	     月涨幅
+
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		.normal{
+			color:#F0F888;
+		}
+		.mystock{
+			color:#7FFFFF;
+		}
+	</fx:Style>
+
+	<s:Label width="40" fontSize="14" fontWeight="normal" paddingTop="6" paddingRight="6" text="{data.id}" textAlign="right" color="white"/>
+	<s:Label width="4%" minWidth="50" fontFamily="中易黑体" fontSize="16" paddingTop="6" text="{data.stock_id}" textAlign="left" styleName="{_style}" />
+	<s:Label width="7%" minWidth="70" paddingTop="4" fontFamily="中易黑体" fontSize="16" text="{data.name}" textAlign="left"  styleName="{_style}" />
+	<comp:mylabel  width="6%" minWidth="60" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.ZLJM.toFixed(2)}" NumberFormat="true" textAlign="right" />
+	<comp:mylabel width="5%" minWidth="64" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.percent.toFixed(2)}%" textAlign="right" />
+	<comp:mylabel width="5%" minWidth="54" color="white" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.price.toFixed(2)}" measureValue="{data.lastClosePrice}" textAlign="right" />
+	<s:Label width="6%" minWidth="64" color="yellow" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.belong}" textAlign="center" />
+	<s:Label width="5%" minWidth="54" color="white" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.lastClosePrice}" textAlign="right" />
+	<s:Label width="5%" minWidth="54" color="white" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.WB.toFixed(2)}" textAlign="right" />
+	<s:Label width="4%" minWidth="40" color="white" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.LB.toFixed(2)}" textAlign="right" />
+	
+	<s:Label width="5%" minWidth="54" color="#F0F888"  paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.HS.toFixed(2)}" textAlign="right" />
+	<comp:mylabel width="8%" minWidth="60"  paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.five.toFixed(2)}" NumberFormat="true" textAlign="right" />
+	
+	<comp:mylabel width="8%"  minWidth="60" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.rise_3day.toFixed(2)}"   textAlign="right" />
+	<comp:mylabel width="8%"  minWidth="60" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.rise_week.toFixed(2)}"   textAlign="right" />
+	<comp:mylabel width="8%"  minWidth="68" paddingTop="6" fontFamily="中易黑体" fontSize="16" text="{data.rise_month.toFixed(2)}"   textAlign="right" />
+
+
+</s:ItemRenderer>

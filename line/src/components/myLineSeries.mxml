@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:LineSeries xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="init()"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- Y 坐标提示 -->
+		<mx:HBox id="yTips" backgroundColor="0xFF0000" width="60" height="22" visible="false">
+			<mx:Label id="yText" color="white"  paddingBottom="4" paddingLeft="4" textAlign="right" fontSize="12" fontWeight="bold" 
+					  paddingTop="4" text="-------"/>
+		</mx:HBox>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			private function init():void
+			{
+				this.addChild(yTips);
+			}
+			
+			public function drawLine(x:Number , y:Number):void
+			{
+				
+				graphics.clear();
+				graphics.lineStyle( 1 , 0x7b7b7b );
+				
+				graphics.moveTo( x , 0 );
+				graphics.lineTo( x , height );
+				
+				if(mouseY > height)
+				{
+					yTips.visible =  false;
+					return;
+				}
+				
+				//水平
+				graphics.moveTo( 0 , this.mouseY );
+				graphics.lineTo( this.width , this.mouseY );
+				
+				yTips.x = this.width - 60;
+				if( this.mouseY + 22 < this.height )
+					yTips.y = this.mouseY;
+				else
+					yTips.y = this.mouseY-22;
+				
+				var val:Number = this.localToData(new Point( 0 , this.mouseY ) )[1];
+				
+				if( val > 100000000)
+					yText.text = (val/100000000).toFixed(2) + '亿';
+				else if(val > 10000)
+					yText.text = (val/10000).toFixed(2) + '万';
+				else
+					yText.text = val.toFixed(2);
+				
+				yTips.visible =  true;
+			}
+		]]>
+	</fx:Script>
+</mx:LineSeries>

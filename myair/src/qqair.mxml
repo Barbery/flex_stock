@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="init(event)"
+					   xmlns:s="library://ns.adobe.com/flex/spark"  backgroundColor="#323333" width="600" height="400"
+					   xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+		<mx:HTTPService id="http" resultFormat="text" result="result(event)" concurrency="last" />
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.Base64Decoder;
+			import mx.utils.Base64Encoder;
+			
+			private var file_url:String;
+			private var face_db:File;
+			private var face_dbc:File;
+			
+			
+			private function init(event:FlexEvent):void
+			{
+				
+			}
+			
+			private function result(event:ResultEvent):void
+			{
+				
+			}
+			
+			protected function backup_clickHandler(event:MouseEvent):void
+			{
+				//Alert.show(Capabilities.os);
+/*
+	Operating system	Value
+	Windows 7	"Windows 7"
+	Windows Vista	"Windows Vista"
+	Windows Server 2008 R2	"Windows Server 2008 R2"
+	Windows Server 2008	"Windows Server 2008"
+	Windows Home Server	"Windows Home Server"
+	Windows Server 2003 R2	"Windows Server 2003 R2"
+	Windows Server 2003	"Windows Server 2003"
+	Windows XP 64	"Windows Server XP 64"
+	Windows XP	"Windows XP"
+	Windows 98	"Windows 98"
+	Windows 95	"Windows 95"
+	Windows NT	"Windows NT"
+	Windows 2000	"Windows 2000"
+	Windows ME	"Windows ME"
+	Windows CE	"Windows CE"
+	Windows SmartPhone	"Windows SmartPhone"
+	Windows PocketPC	"Windows PocketPC"
+	Windows CEPC	"Windows CEPC"
+	Windows Mobile	"Windows Mobile"
+	Mac OS	"Mac OS X.Y.Z" (where X.Y.Z is the version number, for example: "Mac OS 10.5.2")
+	Linux	"Linux" (Flash Player attaches the Linux version, such as "Linux 2.6.15-1.2054_FC5smp"
+	iPhone OS 4.1	"iPhone3,1"
+*/
+				
+				
+				if( file_url == null )
+				{
+					file_url = (File.documentsDirectory).url;
+				}
+				var face_db_url:String = file_url + '/Tencent Files/380032007/CustomFace.db';
+				var face_dbc_url:String = file_url + '/Tencent Files/380032007/CustomFace.dbc';
+				
+				//Alert.show( face_dbc_url );
+				
+				face_db = new File(face_db_url);
+				face_dbc = new File(face_dbc_url);
+				face_db.load();
+				face_dbc.load();
+				
+				setUploadProgress(1 , '已找到表情文件，准备上传');
+				
+				face_db.addEventListener(Event.COMPLETE , load_complete);
+				face_dbc.addEventListener(Event.COMPLETE , load_complete);
+				//Alert.show( face_db.size + ' | ' + face_dbc.size + ' | ' + face_db.data.bytesAvailable );
+
+			}
+			
+			private function load_complete(event:Event):void
+			{
+				if( face_db.data ==null || face_dbc.data ==null )
+				{
+					setUploadProgress(1);
+					return;
+				}
+				setUploadProgress(1);
+				var base64:Base64Encoder = new Base64Encoder();
+
+				var variables:URLVariables = new URLVariables();
+				base64.encodeBytes(face_db.data);
+				variables['db'] = base64.toString();
+				
+				base64.encodeBytes(face_dbc.data);
+				variables['dbc'] = base64.toString();
+				
+				var Loader:URLLoader = new URLLoader();  
+				var request:URLRequest = new URLRequest(encodeURI("http://localhost/face_upload.php"));  
+				request.contentType = "Multipart/form-data";  
+				request.data = variables;
+				request.method = URLRequestMethod.POST;  
+				Loader.dataFormat = URLLoaderDataFormat.BINARY;  
+				Loader.addEventListener(Event.COMPLETE, function():void{Alert.show('搞掂');});  
+				//Loader.addEventListener(IOErrorEvent.IO_ERROR, onUploadError);  
+				//Loader.addEventListener(ProgressEvent.PROGRESS, onUploadProgress);  
+				//navigateToURL(request);
+				Loader.load(request); 
+			}
+			
+			private var currentVal:int = 0;
+			private function setUploadProgress( value:Number , descrip:String=null):void
+			{
+				var total:int = 3;
+				currentVal += value;
+				progress.setProgress( currentVal , total);
+				if( descrip === null )
+					progress.label = "上传进度： " + (currentVal*100 / total).toFixed(2) + '%';
+				else
+					progress.label = descrip;
+			}
+			
+			protected function button2_clickHandler(event:MouseEvent):void
+			{
+				var file:File = new File(); 
+				file.addEventListener(Event.SELECT, dirSelected); 
+				file.browseForOpen("选择你导出的表情包"); 
+				function dirSelected(e:Event):void
+				{ 
+					var test:File = new File(file.url);
+					test.openWithDefaultApplication();
+				}
+			}
+			
+			protected function getBack(event:MouseEvent):void
+			{
+				var new_dbc:File = new File('file:///D:/wamp/www/CustomFace.dbc');
+				var new_db:File = new File('file:///D:/wamp/www/CustomFace.db');
+				
+				var db_stream:FileStream = new FileStream();
+				var dbc_stream:FileStream = new FileStream();
+				
+				db_stream.endian = Endian.LITTLE_ENDIAN
+				db_stream.openAsync(new_db , FileMode.READ);
+				db_stream.addEventListener(Event.COMPLETE, db_fileCompleteHandler);
+				
+				dbc_stream.endian = Endian.LITTLE_ENDIAN
+				dbc_stream.openAsync(new_dbc , FileMode.UPDATE);
+				dbc_stream.addEventListener(Event.COMPLETE, dbc_fileCompleteHandler);
+				
+				function db_fileCompleteHandler(event:Event):void 
+				{
+					var content:String = db_stream.readUTFBytes( db_stream.bytesAvailable );
+					db_stream.close();
+					var decode_db:Base64Decoder = new Base64Decoder();
+					var myPattern:RegExp = /\s/gi;
+					decode_db.decode( content.replace(myPattern, '')  );
+					var byte:ByteArray = decode_db.toByteArray();
+					//db_stream.position = 0;
+					db_stream.open(new_db , FileMode.WRITE);
+					db_stream.writeBytes( byte );
+					db_stream.close();
+					Alert.show('写入完毕' + byte.bytesAvailable);
+				}
+				
+				function dbc_fileCompleteHandler(event:Event):void 
+				{
+					var content:String = dbc_stream.readUTFBytes( dbc_stream.bytesAvailable );
+					dbc_stream.close();
+					var decode_db:Base64Decoder = new Base64Decoder();
+					var myPattern:RegExp = /\s/gi;
+					decode_db.decode( content.replace(myPattern, '')  );
+					var byte:ByteArray = decode_db.toByteArray();
+					//db_stream.position = 0;
+					dbc_stream.open(new_dbc , FileMode.WRITE);
+					dbc_stream.writeBytes( byte );
+					dbc_stream.close();
+					Alert.show('写入完毕' + byte.bytesAvailable);
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<s:Group width="600" height="400">
+		<mx:HRule x="10" y="90" width="580"/>
+		<s:Button x="389" y="116" width="108" height="37" label="备份" chromeColor="#096FD8" click="backup_clickHandler(event)"
+				  color="#FFFFFF" fontSize="22"/>
+		<s:Button x="389" y="170" width="108" height="37" label="还原" chromeColor="#096FD8" click="getBack(event)"
+				  color="#FFFFFF" fontSize="22"/>
+		<s:Button x="10" y="116" width="108" height="37" label="选择目录" chromeColor="#096FD8" click="button2_clickHandler(event)"
+				  color="#FFFFFF" fontSize="22"/>
+		<mx:ProgressBar id="progress" x="10" y="49" width="580" height="33" chromeColor="#5286B9" labelPlacement="center" textAlign="center" mode="manual"
+						color="#FFFFFF" fontSize="14" maximum="1" minimum="0"/>
+	</s:Group>
+</s:WindowedApplication>

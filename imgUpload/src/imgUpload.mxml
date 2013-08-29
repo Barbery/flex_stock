@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   minWidth="955" minHeight="600" creationComplete="application1_creationCompleteHandler(event)">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import flash.net.FileReference;
+			
+			import mx.containers.TitleWindow;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.graphics.codec.JPEGEncoder;
+			import mx.managers.PopUpManager;
+			import mx.utils.Base64Encoder;
+			
+			private var initX:Number;
+			private var initY:Number;
+			private var borderCan:Canvas;
+			//上传
+			private var fileReference:FileReference;
+			//URL操作
+			private var urlRequest:URLRequest;
+			private var param:URLVariables;
+			//测试用图片地址，可以用鼠标拖拽进行选择区域
+			[Bindable]
+			private var imgPath:String="../img/1.jpg"; 
+			private function downHander(e:MouseEvent):void{
+				if(borderCan!=null){
+					this.mainCan.removeChild(borderCan);
+				}                                        
+				initX = preUploadImage.mouseX;
+				initY = preUploadImage.mouseY;
+				this.addEventListener(MouseEvent.MOUSE_MOVE,moveHandler);
+				this.addEventListener(MouseEvent.MOUSE_UP,upHander);
+				borderCan =  new Canvas();
+				borderCan.width=1;
+				borderCan.height=1
+				borderCan.setStyle("borderStyle","solid");
+				borderCan.setStyle("borderColor","red");
+				borderCan.x=initX;
+				borderCan.y=initY;
+				this.mainCan.addChild(borderCan);                    
+			}
+			private var upX:Number;
+			private var upY:Number;
+			private function upHander(e:MouseEvent):void{
+				upX = borderCan.x
+				upY = borderCan.y
+				this.txtX.text ="X坐标："+upX+" 宽度： "+borderCan.width;
+				this.txtY.text = "Y坐标："+upY+" 高度： "+borderCan.height;
+				this.removeEventListener(MouseEvent.MOUSE_MOVE,moveHandler);
+				this.removeEventListener(MouseEvent.MOUSE_UP,upHander);
+			}
+			
+			private function moveHandler(e:MouseEvent):void{                                
+				this.borderCan.width = this.mainCan.mouseX-initX;
+				this.borderCan.height = this.mainCan.mouseY - initY;                
+			}
+			
+			private var w:Number=0;
+			private var h:Number=0;
+			private function getImg():void{                
+				w = borderCan.width;
+				h = borderCan.height;
+				//处理截图时候鼠标反向拖拽的坐标问题
+				var finalX:Number=borderCan.x;
+				var finalY:Number=borderCan.y;
+				if(w<0){
+					finalX = borderCan.x + w;
+					w= -w;
+				}
+				if(h<0){                
+					finalY = borderCan.y + h;
+					h= -h;
+				}
+				
+				//用bitmapdata全部获取预览图片的像素
+				var initBD:BitmapData = new BitmapData(preUploadImage.width,preUploadImage.height);
+				initBD.draw(preUploadImage);                
+				var bytearray:ByteArray = new ByteArray();
+				//矩形为要截取区域                
+				var re:Rectangle = new Rectangle(finalX,finalY,w,h);                            
+				bytearray = initBD.getPixels(re); //截取出所选区域的像素集合
+
+				var imgBD:BitmapData = new BitmapData(w,h);
+				bytearray.position=0;            //必须的，当前的bytearray.position为最大长度，要设为从0开始读取
+				var fillre:Rectangle = new Rectangle(0,0,w,h);
+				imgBD.setPixels(fillre,bytearray);    //将截取出的像素集合存在新的bitmapdata里，大小和截取区域一样
+				
+				var base64:Base64Encoder = new Base64Encoder();
+				//base64.encodeBytes( jpgEncode.encode(imgBD) );
+
+				
+				showImg(imgBD);            //显示图片
+				
+
+				//fileReference.upload("http://localhost/upload.php");
+			}
+			
+			private function showImg(e:BitmapData):void{
+				var t:TitleWindow = new TitleWindow();
+				t.showCloseButton=true;
+				t.addEventListener(CloseEvent.CLOSE,closeWindow);
+				t.width = w+t.getStyle("borderThickness");
+				t.height =h+t.getStyle("borderThickness")+t.getStyle("headerHeight");
+				var img:Image = new Image();
+				img.width = w;
+				img.height = h; 
+				img.source = new Bitmap(e);
+				t.addChild(img);
+				PopUpManager.addPopUp(t,this,true);
+				PopUpManager.centerPopUp(t);
+				
+				var jpgEncode:JPEGEncoder = new JPEGEncoder();
+				urlRequest.data =  jpgEncode.encode( e ) ;
+				var l:URLLoader = new URLLoader();  
+				l.dataFormat = URLLoaderDataFormat.BINARY;
+				l.load( urlRequest );  
+			}
+			private function closeWindow(e:CloseEvent):void{
+				var t:TitleWindow = e.currentTarget as TitleWindow;
+				PopUpManager.removePopUp(t);                
+			}
+
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				fileReference.browse();
+			}
+
+			
+			protected function application1_creationCompleteHandler(event:FlexEvent):void
+			{
+				//param = new URLVariables("img");
+				urlRequest = new URLRequest("http://localhost/upload.php");
+				fileReference = new FileReference();
+				urlRequest.contentType = "application/octet-stream";
+				urlRequest.method = URLRequestMethod.POST;
+				
+//				var header:URLRequestHeader = new URLRequestHeader("Content-type","application/x-www-form-urlencoded");
+//				urlRequest.requestHeaders.push(header);
+
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:Canvas id="mainCan" width="600" height="400" borderColor="white" borderStyle="solid"
+			   mouseDown="downHander(event)">    
+		<mx:Image id="preUploadImage" width="100%" height="100%" source="{imgPath}">
+		</mx:Image>
+	</mx:Canvas>
+	<mx:Button label="浏览文件" click="button1_clickHandler(event)"/>
+	<mx:Button x="10" y="410" label="截图" click="getImg()" fontSize="12"/>
+	<mx:Label id="txtX" x="100" y="410" text="Label"/>
+	<mx:Label id="txtY" x="200" y="410" text="Label"/>
+	<mx:Label id="labelState" x="200" y="510"/>
+</s:Application>

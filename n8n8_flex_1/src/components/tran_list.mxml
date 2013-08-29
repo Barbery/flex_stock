@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:List xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="init()" hide="__distruct()"
+		xmlns:s="library://ns.adobe.com/flex/spark" xmlns:comp="components.*"
+		xmlns:mx="library://ns.adobe.com/flex/mx" width="250" height="100%"
+		borderVisible="false"
+		contentBackgroundColor="#0A0A0A" dataProvider="{_maipan}"
+		itemRenderer="renderer.buy_info_format"
+		>
+	<fx:Declarations>
+		<mx:DateFormatter id="DT" formatString="JJ:NN"/>
+	</fx:Declarations>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		.super{color:#C000C0;}
+		.normal{color:yellow;}
+		.down{color:#50FF50}
+		.eq{color:white}
+		.deal{
+			up:#C000C0;
+			down:yellow;
+		}
+	</fx:Style>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayList;
+			
+			import spark.core.NavigationUnit;
+			
+			[Bindable]
+			private var _maipan:ArrayList;
+			private var timer:Timer;
+			
+			
+			private var _code:int;
+
+			public function get code():int
+			{
+				return _code;
+			}
+			
+			public function set code(value:int):void
+			{
+				_code = value;
+				init();
+			}
+			
+			private function __distruct():void
+			{
+				timer.stop();
+				timer.removeEventListener(TimerEvent.TIMER , update);
+			}
+			
+			private function init():void
+			{
+				if( timer != null )
+				{
+					__distruct();
+				}
+
+				getDealData();
+				
+				var updateTime:int = 6000;
+				timer = new Timer(updateTime);
+				timer.addEventListener(TimerEvent.TIMER , update);
+				timer.start();
+			}
+			
+			private function update(event:TimerEvent):void
+			{
+				getDealData();
+			}
+			
+			private function getDealData():void{
+				var byte:ByteArray = new ByteArray;
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1707 );
+				byte.writeUnsignedInt( 8 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 1 );
+				byte.writeInt( _code );
+				byte.writeInt(0);
+				
+				(new MySocket).send( byte , dealDataHandler );
+			}
+
+			private function dealDataHandler( result:ByteArray ):void
+			{
+				var arr:Array;
+				result.position += 4;
+				var code:int = result.readInt();
+				var count:int =  result.readInt();
+				arr = (Decompress.getInstance()).getFBdata( code , count , result);
+				
+				arr.shift();
+				--count;
+				
+				for(var i:int=0 ; i<count ; ++i)
+				{
+					arr[i]["lastClosePrice"] = this.parentApplication.lastClosePrice.toFixed(2);
+				}
+				
+				_maipan = new ArrayList( arr );
+
+				validateNow();
+				layout.verticalScrollPosition = layout.getVerticalScrollPositionDelta(NavigationUnit.END);
+			}
+		]]>
+	</fx:Script>
+</s:List>

@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:comp="components.*"
+			   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init()" initialize="application1_initializeHandler(event)"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" minWidth="540" height="100%">
+	<s:layout>
+		<s:VerticalLayout gap="0" />
+	</s:layout>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import components.MySocket;
+			
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+
+			
+			public var stockCode:int;
+			public var cycle:int = 11;
+			public var lastClosePrice:int;
+			
+			private var _obj:Object;
+			private var socketReady:Boolean =false;
+
+			
+			private function label1_mouseOverHandler(event:MouseEvent):void
+			{
+				var obj:Object = event.target;
+				if( obj is Label && obj !== _obj )
+					obj.styleName="top_over";
+			}
+			
+			private function label1_mouseOutHandler(event:MouseEvent):void
+			{
+				var obj:Object = event.target;
+				if( obj is Label && obj !== _obj )
+					obj.styleName="topbar";
+			}
+			
+			private function bordercontainer1_clickHandler(event:MouseEvent):void
+			{
+				if( _obj != null )
+					_obj.styleName = "topbar";
+				
+				_obj = event.target;
+				_obj.styleName = "top_over";
+				
+				switch(_obj.text)
+				{
+					case '分时':
+						view.selectedIndex = 0;
+						return;
+					case '日K':
+						cycle = 11;
+						break;
+					case "5分钟":
+						cycle = 5;
+						break;
+					case "15分钟":
+						cycle = 7;
+						break;
+					case "30分钟":
+						cycle = 9;
+						break;
+					case "60分钟":
+						cycle = 10;
+						break;
+					case "周K":
+						cycle = 12;
+						break;
+					case "月K":
+						cycle = 13;
+						break;
+				}
+				
+				if( view.selectedIndex !== 1 )
+				{
+					view.selectedIndex = 1;
+				}
+				else
+				{
+					kline.init();
+				}
+				
+				
+			}
+			
+			private function fullScreen(event:MouseEvent):void
+			{
+				if( event.target.label == '全屏' )
+				{
+					stage.displayState = StageDisplayState.FULL_SCREEN;
+					event.target.label = '返回';
+				}
+				else
+				{
+					stage.displayState = StageDisplayState.NORMAL;
+					event.target.label = '全屏';
+				}
+			}
+			
+			private function init():void
+			{
+				testSocket();
+				
+				if( FlexGlobals.topLevelApplication.parameters.stock == null )
+				{
+					Alert.show('股票代码有误，请联系管理员');
+					return;
+				}
+				
+				var code:int = int(FlexGlobals.topLevelApplication.parameters.stock.substr(-6));
+				stockCode = code >= 600000 ? code : code+1000000;
+				
+				if( stockCode < 1 )
+				{
+					Alert.show('股票代码有误，请联系管理员');
+					return;
+				}
+					
+				fsline.init();
+			}
+			
+			private function application1_initializeHandler(event:FlexEvent):void
+			{
+				testSocket();
+			}
+			
+			private function testSocket():void
+			{
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1701 );
+				byte.writeUnsignedInt( 20 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeInt( 0 );
+				byte.writeInt( 1 );
+				byte.writeInt( 0 );
+				byte.writeInt( -1 );
+				byte.writeInt( 4 );
+				
+				(new MySocket).send( byte , function(result:ByteArray):void{ socketReady = true; } );
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace comp "components.*";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		
+		.topbar{
+			height:22px;
+			fontSize:14;
+			paddingTop:4px;
+			paddingBottom:4px;
+			paddingLeft:8px;
+			paddingRight:8px;
+			color:#575757;
+			backgroundColor:#EEF5FF;
+			textAlign:center;
+		}
+		
+		.top_over{
+			height:22px;
+			fontSize:14;
+			paddingTop:4px;
+			paddingBottom:4px;
+			paddingLeft:8px;
+			paddingRight:8px;
+			color:#575757;
+			backgroundColor:#FFFFFF;
+			textAlign:center;
+		}
+		
+	</fx:Style>
+	<s:BorderContainer width="100%" height="22" borderAlpha="0.3" borderColor="#e9e9e9" click="bordercontainer1_clickHandler(event)" mouseOver="label1_mouseOverHandler(event)" mouseOut="label1_mouseOutHandler(event)">
+		<s:layout>
+			<s:HorizontalLayout gap="0" />
+		</s:layout>
+		<s:Label  text="分时" styleName="topbar" width="100%" />
+		<s:Label  text="日K" styleName="topbar" width="100%" />
+		<s:Label  text="周K" styleName="topbar" width="100%" />
+		<s:Label  text="月K" styleName="topbar" width="100%" />
+		<s:Label  text="5分钟" styleName="topbar" width="100%" />
+		<s:Label  text="15分钟" styleName="topbar" width="100%" />
+		<s:Label  text="30分钟" styleName="topbar" width="100%" />
+		<s:Label  text="60分钟" styleName="topbar" width="100%" />
+
+		<s:Button label="全屏" fontSize="14" click="fullScreen(event)" width="48"/>
+
+	</s:BorderContainer>
+	
+	<mx:ViewStack width="100%" height="100%" id="view" >
+		<comp:myfsline id="fsline" />
+		<comp:mykline id="kline" />
+	</mx:ViewStack>
+</s:Application>

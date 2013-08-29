@@ -1,0 +1,703 @@
+<?xml version="1.0"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   xmlns:comp="components.*" preloader="preloader.Preloader"
+			   creationComplete="init()" backgroundAlpha="1.0" backgroundColor="#0A0A0A">
+	<fx:Declarations>
+		<!-- 搜索框 -->
+		<s:TitleWindow id="search_window" width="250" minHeight="220" backgroundAlpha="0.88"
+					   backgroundColor="#033548" close="titlewindow1_closeHandler(event)"
+					   title="快速查询 - （按ESC键可快速关闭）">
+			<s:layout>
+				<s:VerticalLayout/>
+			</s:layout>
+			<s:TextInput width="248" borderVisible="false" id="input" focusEnabled="false" editable="false"/>
+			<s:List id="search_list"  minHeight="220" height="100%" borderVisible="false" width="100%" color="white"
+					contentBackgroundAlpha="0.0" contentBackgroundColor="#033548"
+					dataProvider="{_data}" click="search_list_clickHandler(event)" labelFunction="search_list_format"/>
+		</s:TitleWindow>
+		
+		<mx:HTTPService id="srv3" resultFormat="text" result="addMyStock(event)" concurrency="last" method="POST" />
+		<mx:HTTPService id="srv2" resultFormat="text" result="resultMain(event)" concurrency="last" />
+		<mx:HTTPService id="srv" resultFormat="text" result="addStock(event)" concurrency="last" />
+		
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import components.MySocket;
+			
+			import mx.collections.ArrayList;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.IndexChangedEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			private static const nextCycle:Array = ['5分钟','15分钟','30分钟','60分钟','日线','周线','月线'];
+			private var key:int = 0;
+			private var isReadHead:Boolean = false;
+			private var _length:uint;
+			private var _mySocket:MySocket = new MySocket();
+			
+			//全局股票代码
+			public var stockCode:int = 600036;
+			//周期  约定：如果等于0 则为 分时线
+			public var cycle:int = 11;
+			//板块
+			public var blocktype:int = -1;
+			//T-N数据
+			public var secret:String;
+			//是否已加载搜索框
+			public var isLoadSearch:Boolean=false;
+
+			//是否切换到自选股
+			public var changeToMystock:Boolean=false;
+			
+			public var mystock:Array = [];
+			
+			public var lastClosePrice:Number;
+			
+			public var vol:Number;
+			
+			//默认指标
+			public var index:int = -1;
+			
+			[Bindable]
+			private var _data:ArrayList;
+			
+			
+			private function choose_stock( code:String = null ):void {
+				
+				if( code != null )
+				{
+					code = code.replace('SH','');
+					code = code.replace('SZ','1');
+					this.stockCode = int(code);
+				}
+				
+				view.selectedIndex = 1;
+				line.refresh();
+				
+			}
+			
+			
+			private function init():void{
+				this.secret = FlexGlobals.topLevelApplication.parameters.secret;
+				
+				//定义js调用接口
+				ExternalInterface.addCallback("choose_stock",choose_stock);
+				ExternalInterface.addCallback("choose_plate",changeCycle);
+				ExternalInterface.addCallback("SH_clickHandler",SH_clickHandler);
+				
+				//定义右键菜单
+				var contextMenu : ContextMenu = new ContextMenu();
+				contextMenu.hideBuiltInItems();
+				
+				var add:ContextMenuItem = new ContextMenuItem("添加到自选股" , false);
+				var my:ContextMenuItem = new ContextMenuItem("添加到专属个股" , false);
+				
+				var fsline:ContextMenuItem = new ContextMenuItem( '分时线' , true ) ;
+				var day:ContextMenuItem = new ContextMenuItem("日线");
+				
+				var hq:ContextMenuItem = new ContextMenuItem("行情",true);
+				
+				var five:ContextMenuItem = new ContextMenuItem("5分钟",true);
+				var fifteen:ContextMenuItem = new ContextMenuItem("15分钟");
+				var thirty:ContextMenuItem = new ContextMenuItem("30分钟");
+				var sixty:ContextMenuItem = new ContextMenuItem("60分钟");
+				var month:ContextMenuItem = new ContextMenuItem("周线");
+				var year:ContextMenuItem = new ContextMenuItem("月线");
+				//添加监听事件
+				add.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				my.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				fsline.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				five.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				fifteen.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				thirty.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				sixty.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				day.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				month.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				year.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				hq.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , _menu , false , 0 ,true);
+				//加入菜单
+				contextMenu.customItems.unshift(add, my , fsline,day,hq,five,fifteen,thirty,sixty,month,year);
+				this.contextMenu = contextMenu;
+				
+				
+				//股票列表中双击进去对应股票
+				this.systemManager.stage.addEventListener(MouseEvent.DOUBLE_CLICK , function(event:MouseEvent):void{
+					if(view.selectedIndex != 1 )
+					{
+						view.selectedIndex = 1;
+						cycle=0;
+						line.changeToFSline();
+					}
+				});
+				
+				//主要指数信息
+				srv2.url="http://app.n8n8.cn/data/index?style=0&type=1511&stock=SH000001,SZ399001&r=0.6629278152249753&callback=jQuery17104106648659799248_1334541425390&_="+ new Date().time;
+				srv2.send();
+				var _timer:Timer = new Timer(6000,0);
+				_timer.addEventListener(TimerEvent.TIMER , function():void{
+					srv2.url="http://app.n8n8.cn/data/index?style=0&type=1511&stock=SH000001,SZ399001&r=0.6629278152249753&callback=jQuery17104106648659799248_1334541425390&_="+ new Date().time;
+					srv2.send();
+				});
+				_timer.start();
+				
+				
+				var _username:String = username.text = FlexGlobals.topLevelApplication.parameters.username;
+
+				
+				this.systemManager.stage.addEventListener(KeyboardEvent.KEY_DOWN ,_keyDownHandler , false , 0 ,true);
+				
+			}
+			
+			private function searchCode(str:String):void{
+				
+				var isStr:Boolean = true;
+				var value:int = parseInt(str);
+				
+				if( ! isNaN(parseInt(str)) )
+				{
+					isStr = false;
+				}
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1709 );
+				isStr ? byte.writeUnsignedInt( 4+str.length ) : byte.writeUnsignedInt(8);
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				isStr ? byte.writeUnsignedInt( 4 ) : byte.writeUnsignedInt(str.length) ;
+				byte.writeUTFBytes(str.toUpperCase());
+				
+				_mySocket.send( byte , searchCodeBack );
+			}
+			
+			private function searchCodeBack(result:ByteArray):void{
+				var count:uint = result.readUnsignedInt();
+				
+				count = count > 10 ? 10 : count;
+				_data = new ArrayList();
+				for(var i:int=0;i<count;i++)
+				{
+					result.position += 4;
+					var code:int = result.readInt();
+					if( code > 1000000 )
+						_data.addItem({ "stock_id": code.toString().substr(1) , "name": result.readMultiByte( 8 , "cn-gb") , "stockCode":code });
+					else
+						_data.addItem({ "stock_id": code.toString() , "name": result.readMultiByte( 8 , "cn-gb"), "stockCode":code });
+				}
+				
+			}
+			
+			private function _keyDownHandler(event:KeyboardEvent):void{
+				
+				if( !isLoadSearch && ( (event.keyCode >= 48 && event.keyCode <= 90) || (event.keyCode >= 96 && event.keyCode <= 106) ) )
+				{
+					//减掉search_window本事大小占用的位置
+					search_window.x = this.systemManager.stage.stageWidth - 260;
+					search_window.y = this.systemManager.stage.stageHeight - 300;
+					this.addElement(search_window);
+					search_list.setFocus();
+					isLoadSearch = true;
+				}
+				
+				if( (event.keyCode >= 48 && event.keyCode <= 90) || (event.keyCode >= 96 && event.keyCode <= 106) )
+				{
+					input.appendText(String.fromCharCode(event.charCode));
+					searchCode(input.text);
+				}
+				else
+				{
+					
+					switch(event.keyCode)
+					{
+						case 8:
+							var str:String;
+							str = input.text = input.text.substr(0,input.text.length-1);
+							if( str != '' ){
+								searchCode(str);
+							}
+							break;
+						case 13:
+							//如果加载了search_window 说明用户正在查找股票，按回车后更新股票代码
+							if(isLoadSearch)
+							{
+								//判断输入的股票代码是否含有特殊操作
+								
+								if (search_list.selectedIndex < 0) 
+								{
+									if ( this.special_code( input.text ) )
+									{
+										titlewindow1_closeHandler(CloseEvent.CLOSE as CloseEvent);
+										return;
+									}
+									search_list.selectedIndex=0;
+									
+								}
+								var code:int = search_list.selectedItem.stockCode;
+								
+								//Alert.show( stockCode );
+								titlewindow1_closeHandler(CloseEvent.CLOSE as CloseEvent);
+
+								stockCode = code;
+								
+								if(view.selectedIndex !== 1)
+									changeCycle("分时线");
+								else
+									line.refresh();
+								
+								return;
+							}
+							//Alert.show("asd");
+							//否则切换到分时线
+							this.toggle_line();
+							break;
+						case 27:
+							if(isLoadSearch)
+							{
+								titlewindow1_closeHandler(CloseEvent.CLOSE as CloseEvent);
+								break;
+							}
+							view.selectedIndex = 0;
+							break;
+						case 114:
+							SH_clickHandler( 000001);
+							break;
+						case 115:
+							SH_clickHandler( 1399001);
+							break;
+						case 116:
+							this.toggle_line();
+							break;
+						case 117:
+							view.selectedIndex = 0;
+							this.changeToMystock = true;
+							break;
+						
+					}
+					
+				}
+				
+			}
+			
+			
+			private function resultMain(event:ResultEvent):void{
+				var words:Array = event.result.toString().split(';');
+				var subwords:Array = [];
+				
+				subwords = words[0].split(',');
+				if( subwords[2] < 1 )
+				{
+					SH.text =  '0     0     0%';
+				}
+				else
+				{
+					var upAndDown:int = (subwords[2] - subwords[5])*100;
+					if( upAndDown < 0 ) 
+						SH.styleName = "down";
+					else
+						SH.styleName = "up";
+					SH.text = subwords[2] + '    '+ upAndDown/100 + '    ' + subwords[3];
+					SHVolume.text = int(subwords[12]/100000000) + '亿';
+				}
+				
+				
+				subwords = words[1].split(',');
+				
+				if( subwords[2] < 1 )
+				{
+					SZ.text =  '0     0     0%';
+				}
+				else
+				{
+					upAndDown = (subwords[2] - subwords[5])*100;
+					if( upAndDown < 0 ) 
+						SZ.styleName = "down";
+					else
+						SZ.styleName = "up";
+					SZ.text = subwords[2] + '    '+ upAndDown/100 + '    ' + subwords[3];
+					SZVolume.text = int(subwords[12]/100000000) + '亿';
+				}
+				
+			}
+			
+			private function addMyStock(event:ResultEvent):void{
+				var str:String = event.result.toString();
+				if(str.length<2)
+					Alert.show('异常错误，请刷新重试');
+				
+				var result:Object = JSON.parse(str);
+				
+				if(result.code == 0)
+				{
+					Alert.show('添加成功');
+				}
+				
+				Alert.show(result.msg);
+			}
+			
+			//处理search_window 关闭事件
+			public function titlewindow1_closeHandler(event:CloseEvent):void
+			{
+				isLoadSearch = false;
+				this.removeElement(search_window);
+				input.text="";
+				this.setFocus();
+			}
+			
+			private function search_list_clickHandler(event:MouseEvent):void
+			{
+				
+				// 选中股票
+				var code:int = search_list.selectedItem.stockCode;
+				titlewindow1_closeHandler(CloseEvent.CLOSE as CloseEvent);
+
+				stockCode = code;
+				changeCycle("分时线");
+				
+			}
+			
+			private function search_list_format(item:Object):String{
+				return item.stock_id+"\t \t"+item.name;
+			}
+			
+			private function _menu(event:ContextMenuEvent):void{
+				this.changeCycle( ContextMenuItem(event.currentTarget).caption );
+			}
+			
+			//menu 的切换handler
+			public function changeCycle( str:String, i:int = -1 ):void{
+				index = i;
+				switch( str )
+				{
+					case "分时线":
+						if( view.selectedIndex !== 1 )
+							view.selectedIndex = 1;
+						line.changeToFSline();
+						return;
+					case "日线":
+						cycle = 11 ;
+						break;
+					case "行情":
+						blocktype = -1;
+						view.selectedIndex = 0;
+						return;
+					case "5分钟":
+						cycle = 5 ;
+						break;
+					case "15分钟":
+						cycle = 7 ;
+						break;
+					case "30分钟":
+						cycle = 9 ;
+						break;
+					case "60分钟":
+						cycle = 10 ;
+						break;
+					case "周线":
+						cycle = 12 ;
+						break;
+					case "月线":
+						cycle = 13 ;
+						break;
+					case "个股综合":
+						view.selectedIndex = 2;
+						return;
+					case "板块综合":
+						view.selectedIndex = 3;
+						return;
+					case "添加到自选股":
+						
+						if( username.text == null || username.text.length < 1 )
+						{
+							//ExternalInterface.call("showLogBox2");
+							return;
+						}
+						if( this.stockCode > 1000000 )
+						{
+							srv.url = 'http://free.n8n8.cn/index.php?m=Freeversion&a=addOptionalStock&stock_code=SZ' + this.stockCode.toString().substr(1) ;
+						}
+						else
+						{
+							srv.url = 'http://free.n8n8.cn/index.php?m=Freeversion&a=addOptionalStock&stock_code=SH' + this.stockCode;
+						}
+						srv.send();
+						return;
+					case "添加到专属个股":
+						
+						var params:Object={};
+						if( this.stockCode > 1000000 )
+						{
+							srv3.url = 'http://u.n8n8.cn/User/?m=Timeline&a=addTrialFree';
+							params.stockCode = 'SZ' + this.stockCode.toString().substr(1);
+						}
+						else
+						{
+							srv3.url = 'http://u.n8n8.cn/User/?m=Timeline&a=addTrialFree';
+							params.stockCode = 'SH' + this.stockCode;
+						}
+						Alert.show('你确认添加 ' + params.stockCode + ' 为你的专属个股吗？', '', Alert.YES|Alert.NO , this, alertClickHandler);
+						function alertClickHandler(evt:CloseEvent):void
+						{
+							if(evt.detail == Alert.YES)
+								srv3.send(params);
+						}
+						
+						return;
+				}
+				
+				view.selectedIndex = 1;
+				line.changeToKline();
+				
+			}
+			
+			//特殊代码操作
+			private function special_code(code:String = null):Boolean{
+				
+				switch( code ){
+					case '01':
+					case '88'://切换到版块综合排行榜
+						view.selectedIndex = 3;
+						return true;
+					case '80'://切换到个股综合排行榜
+						view.selectedIndex = 2;
+						return true;
+					case '02'://切换到行情
+						view.selectedIndex = 0;
+						return true;
+					case '03'://切换到上证分时线
+						SH_clickHandler( 000001);
+						return true;
+					case '04'://切换到深证分时线
+						SH_clickHandler( 1399001);
+						return true;
+					case '05'://切换K线与分时线
+						toggle_line();
+						return true;
+					case '08'://切换周期 从5分钟开始 到 月线 循环
+						if( view.selectedIndex === 1 || view.selectedIndex === 2 ){
+							changeCycle(nextCycle[key++]);
+							if( key > 6 )
+								key = 0;
+						}
+						return true;
+					case '61'://沪A行情
+						blocktype = 1;
+						if( view.selectedIndex === 0 ){
+							list.__distruct();
+							list.init();
+						}else{
+							view.selectedIndex = 0;
+						}
+						return true;
+					case '63'://深A行情
+						blocktype = 8;
+						if( view.selectedIndex === 0 ){
+							list.__distruct();
+							list.init();
+						}else{
+							view.selectedIndex = 0;
+						}
+						return true;
+					case '81'://沪A综合
+						blocktype = 1;
+						if( view.selectedIndex === 2 ){
+							stock_plate.__distruct();
+							stock_plate.init();
+						}else{
+							view.selectedIndex = 2;
+						}
+						return true;
+					case '83'://深A综合
+						blocktype = 8;
+						if( view.selectedIndex === 2 ){
+							stock_plate.__distruct();
+							stock_plate.init();
+						}else{
+							view.selectedIndex = 2;
+						}
+						return true;
+				}
+				return false;
+			}
+			
+			
+			private function SH_clickHandler(code:int):void
+			{
+				stockCode = code ;
+				this.changeCycle( "分时线" );
+			}
+			
+			private function view_changeHandler(event:IndexChangedEvent):void
+			{
+
+				if ( view.selectedIndex === 1 ){
+					top.visible = true;
+					top.includeInLayout = true;
+				}else{
+					top.visible = false;
+					top.includeInLayout = false;
+				}
+			}
+			
+			private function addStock(event:ResultEvent):void
+			{
+				if( event.result.toString() === 'true' )
+				{
+					this.mystock.push(this.stockCode);
+					Alert.show("添加成功！" );
+				}
+				else
+				{
+					if( username.text == null )
+						Alert.show("添加失败，请检查是否已登陆" );
+					else
+						Alert.show("添加失败，请检查自选股是否已添加" );
+				}
+			}
+			
+			private function toggle_line():void
+			{
+				if( view.selectedIndex !== 1 )
+					view.selectedIndex = 1;
+				
+				if( this.cycle !== 0 ){
+					this.cycle = 0;
+					line.changeToFSline();
+				}else{
+					this.cycle = 11;
+					line.changeToKline();
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		.up{color:red;}
+		.down{color:green}
+		s|BorderContainer{
+			backgroundColor:#0A0A0A;
+			contentBackgroundColor:#0A0A0A;
+		}
+		
+		s|ButtonBar s|ButtonBarButton:upAndSelected,
+		s|ButtonBar s|ButtonBarButton:overAndSelected,
+		s|ButtonBar s|ButtonBarButton:downAndSelected,
+		s|ButtonBar s|ButtonBarButton:disabledAndSelected {
+			chromeColor: #581818;
+			color: red;
+		}
+		
+		s|ButtonBar { 
+			chromeColor: #0A0A0A;
+			color: red;
+		}
+		
+		mx|ToolTip
+		{
+			fontSize:16px;
+			color:#4BDBFF;
+			backgroundColor:#434343;
+		}
+		
+		mx|Alert{ font-size: 14}
+		
+	</fx:Style>
+	<s:BorderContainer  width="100%" height="100%" borderVisible="false" borderWeight="0" contentBackgroundColor="#0A0A0A">
+		<s:layout>
+			<s:VerticalLayout gap="0"/>
+		</s:layout>
+		<!-- top tap -->
+		<s:BorderContainer id="top" visible="false" includeInLayout="false" width="100%" height="20" borderVisible="false" borderWeight="0" contentBackgroundColor="#0A0A0A" >
+			<s:layout>
+				<s:HorizontalLayout gap="2"/>
+			</s:layout>
+			
+			<s:Spacer width="20" />
+			<s:Label color="#FF0000" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			<s:Label paddingTop="4" text="日线" click="{this.changeCycle( event.target.text )}" useHandCursor="true" buttonMode="true" color="red" width="50" textAlign="center" fontWeight="bold" fontSize="16"/>
+			<s:Label color="#FF0000" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			
+			<s:Label paddingTop="4" text="分时线" click="{this.changeCycle( event.target.text )}" useHandCursor="true" buttonMode="true" color="red" width="50" textAlign="center" fontWeight="bold" fontSize="16" />
+			<s:Label color="#FF0000" paddingLeft="20" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			
+			<s:Label paddingTop="6" text="5分钟" click="{this.changeCycle( event.target.text )}" useHandCursor="true" buttonMode="true" color="red" width="50" textAlign="center" fontWeight="bold" fontSize="14" />
+			<s:Label color="#FF0000" paddingLeft="20" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			
+			<s:Label paddingTop="6" text="15分钟" click="{this.changeCycle( event.target.text )}" useHandCursor="true" buttonMode="true" color="red" width="50" textAlign="center" fontWeight="bold" fontSize="14" />
+			<s:Label color="#FF0000" paddingLeft="20" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			
+			<s:Label paddingTop="6" text="30分钟" click="{this.changeCycle( event.target.text )}" useHandCursor="true" buttonMode="true" color="red" width="50" textAlign="center" fontWeight="bold" fontSize="14" />
+			<s:Label color="#FF0000" paddingLeft="20" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			
+			<s:Label paddingTop="6" text="60分钟" click="{this.changeCycle( event.target.text )}" useHandCursor="true" buttonMode="true" color="red" width="50" textAlign="center" fontWeight="bold" fontSize="14" />
+			<s:Label color="#FF0000" paddingLeft="20" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			
+			<s:Label paddingTop="4" text="周线" click="{this.changeCycle( event.target.text )}" useHandCursor="true" buttonMode="true" color="red" width="50" textAlign="center" fontWeight="bold" fontSize="16" />
+			<s:Label color="#FF0000" paddingLeft="20" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			
+			<s:Label paddingTop="4" text="月线" click="{this.changeCycle( event.target.text )}" useHandCursor="true" buttonMode="true" color="red" width="50" textAlign="center" fontWeight="bold" fontSize="16" />
+			<s:Label color="#FF0000" paddingLeft="20" backgroundColor="red" width="2" height="100%" fontWeight="bold" text=" "/>
+			
+		</s:BorderContainer>
+		
+		<s:BorderContainer width="100%" height="100%" borderVisible="false" borderWeight="0" contentBackgroundColor="#0A0A0A">
+			<s:layout>
+				<s:HorizontalLayout gap="0"/>
+			</s:layout>
+			<!-- left tap -->
+			<s:BorderContainer width="20" height="100%" borderVisible="false" borderWeight="0" contentBackgroundColor="#0A0A0A">
+				<s:layout>
+					<s:VerticalLayout gap="10" />
+				</s:layout>
+				<s:BorderContainer width="100%" backgroundColor="#0A0A0A" borderColor="red" useHandCursor="true" buttonMode="true"  click="{this.changeCycle('行情')}" toolTip="个股行情">
+					<s:Label x="0" y="0" width="20" height="53" color="white" fontSize="14" 
+							 paddingLeft="2" paddingRight="2" paddingTop="10" text="行情"/>
+				</s:BorderContainer>
+				<s:BorderContainer width="100%" backgroundColor="#0A0A0A" borderColor="red" useHandCursor="true" buttonMode="true" click="{view.selectedIndex = 2; }" toolTip="个股综合排行榜">
+					<s:Label x="0" y="0" width="20" height="80" color="white" fontSize="14"
+							 paddingLeft="2" paddingRight="2" paddingTop="10" text="个股综合" />
+				</s:BorderContainer>
+				<s:BorderContainer width="100%" backgroundColor="#0A0A0A" borderColor="red" useHandCursor="true" buttonMode="true" click="{ view.selectedIndex = 3; }" toolTip="板块综合排行榜" >
+					<s:Label x="0" y="0" width="20" height="80" color="white" fontSize="14"
+							 paddingLeft="2" paddingRight="2"  paddingTop="10" text="板块综合" />
+				</s:BorderContainer>
+			</s:BorderContainer>
+			<s:BorderContainer width="100%" height="100%" borderColor="#FF0000"
+							   borderVisible="true" borderWeight="1"
+							   contentBackgroundColor="#0A0A0A">
+				<mx:ViewStack id="view" selectedIndex="0" height="100%" width="100%" change="view_changeHandler(event)" creationPolicy="auto">
+					<comp:mylist id="list" x="0" y="0"/>
+					<comp:test_line id="line" x="0" y="0" />
+					<comp:mystock_plate id="stock_plate" x="0" y="0"/>
+					<comp:myplate x="0" y="0"/>
+				</mx:ViewStack>
+				
+			</s:BorderContainer> 
+		</s:BorderContainer>
+		
+		<s:BorderContainer  x="0" width="100%" height="20" backgroundColor="#FFFFFF">
+			<s:layout>
+				<s:HorizontalLayout verticalAlign="middle"/>
+			</s:layout>
+			<s:Label color="#000000" fontSize="13" paddingLeft="20" text="上证"/>
+			<s:Label id="SH" fontWeight="bold" styleName="up" text="加载中..." useHandCursor="true" buttonMode="true" mouseChildren="false" click="SH_clickHandler( 000001)" toolTip="点击查看上证指数分时图走势" />
+			<s:Label id="SHVolume" color="#050505" fontSize="14" fontWeight="bold" text="加载中..."/>
+			<s:Label color="#000000" fontSize="13" paddingLeft="30" text="深证"/>
+			<s:Label id="SZ" fontWeight="bold" styleName="up" text="加载中..." useHandCursor="true" buttonMode="true" mouseChildren="false" click="SH_clickHandler( 1399001 )" toolTip="点击查看深证指数分时图走势" />
+			<s:Label id="SZVolume" color="#000000" fontSize="14" fontWeight="bold" text="加载中..."/>
+			
+			<s:Label id="username" color="#001EFF" fontSize="14" fontWeight="bold" text="--" paddingLeft="100" click="{navigateToURL(new URLRequest('http://u.n8n8.cn/') ) }" useHandCursor="true" buttonMode="true" />
+			<s:Label color="#000000" fontSize="14" fontWeight="bold" text="欢迎来到经传行情中心" toolTip="beta 1.5.0" paddingLeft="20" />
+		</s:BorderContainer>
+	</s:BorderContainer>
+</s:Application>

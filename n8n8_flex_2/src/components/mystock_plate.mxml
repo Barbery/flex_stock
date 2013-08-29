@@ -1,0 +1,1390 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:NavigatorContent xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					xmlns:s="library://ns.adobe.com/flex/spark" xmlns:comp="components.*"
+					xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" show="init()" hide="__distruct()">
+	<fx:Declarations>
+		
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import components.MySocket;
+			
+			import mx.utils.ObjectProxy;
+			
+			private var old:Object;
+			private var _timer:Timer;
+			[Bindable]
+			private var _myData:ObjectProxy;
+			
+			public function __distruct():void{
+				_timer.stop();
+				_timer.removeEventListener( TimerEvent.TIMER , arguments.callee);
+			}
+			
+			public function init():void{
+				
+				this.getResult();
+				
+				_timer = new Timer(15000,0);
+				_timer.addEventListener(TimerEvent.TIMER , function():void{
+					getResult();
+				});
+				_timer.start();
+				
+			}
+			
+			private function getResult():void{
+				var bolcktype:int = this.parentApplication.blocktype;
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1702 );
+				byte.writeUnsignedInt( 93 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeInt( 0 );
+				byte.writeInt( 8 );
+				byte.writeInt( 9 );
+				
+				//今日涨幅
+				byte.writeInt( -1 );
+				byte.writeInt( 4 );
+				byte.writeBoolean(false);
+				
+				//今日跌幅
+				byte.writeInt( bolcktype );
+				byte.writeInt( 4 );
+				byte.writeBoolean(true);
+				
+				//今日振幅
+				byte.writeInt( bolcktype );
+				byte.writeInt( 15 );
+				byte.writeBoolean(false);
+				
+				//5分钟涨速
+				byte.writeInt( bolcktype );
+				byte.writeInt( 25 );
+				byte.writeBoolean(false);
+				
+				//5分钟跌速
+				byte.writeInt( bolcktype );
+				byte.writeInt( 25 );
+				byte.writeBoolean(true);
+				
+				//今日量比
+				byte.writeInt( bolcktype );
+				byte.writeInt( 18 );
+				byte.writeBoolean(false);
+				
+				//今日委比
+				byte.writeInt( bolcktype );
+				byte.writeInt( 16 );
+				byte.writeBoolean(false);
+				
+				//委比后排名
+				byte.writeInt( bolcktype );
+				byte.writeInt( 16 );
+				byte.writeBoolean(true);
+				
+				//今日总金额排名
+				byte.writeInt( bolcktype );
+				byte.writeInt( 12 );
+				byte.writeBoolean(false);
+				
+				(new MySocket).send( byte , resultHandler );
+			}
+			
+			private function resultHandler(result:ByteArray):void{
+				var temp:Object = new Object;
+				//var count:int = result.readInt();
+				//Alert.show(  ' | ' +result.bytesAvailable );
+				
+				//行业涨幅
+				var stockCount:int = result.readInt();
+				var k:int = 0;
+				var str:String;
+				for( var i:int = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['A1'+ str + 'stockCode'] = result.readInt();
+					temp['A1'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['A1'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['A1'+ str + (++k)] = result.readFloat();
+					temp['A1'+ str + (++k)] = result.readFloat();
+				}
+				
+				//行业跌幅
+				stockCount = result.readInt();
+				
+				for( i = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['A2'+ str + 'stockCode'] = result.readInt();
+					temp['A2'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['A2'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['A2'+ str + (++k)] = result.readFloat();
+					temp['A2'+ str + (++k)] = result.readFloat();
+				}
+				
+				//行业5分钟涨幅
+				stockCount = result.readInt();
+				
+				for( i = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['A3'+ str + 'stockCode'] = result.readInt();
+					temp['A3'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['A3'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['A3'+ str + (++k)] = result.readFloat();
+					temp['A3'+ str + (++k)] = result.readFloat();
+				}
+				
+				//概念涨幅
+				stockCount = result.readInt();
+				
+				for( i = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['B1'+ str + 'stockCode'] = result.readInt();
+					temp['B1'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['B1'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['B1'+ str + (++k)] = result.readFloat();
+					temp['B1'+ str + (++k)] = result.readFloat();
+				}
+				
+				//概念跌幅
+				stockCount = result.readInt();
+				
+				for( i = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['B2'+ str + 'stockCode'] = result.readInt();
+					temp['B2'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['B2'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['B2'+ str + (++k)] = result.readFloat();
+					temp['B2'+ str + (++k)] = result.readFloat();
+				}
+				
+				//概念5分钟涨幅
+				stockCount = result.readInt();
+				
+				for( i = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['B3'+ str + 'stockCode'] = result.readInt();
+					temp['B3'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['B3'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['B3'+ str + (++k)] = result.readFloat();
+					temp['B3'+ str + (++k)] = result.readFloat();
+				}
+				
+				//行业5分钟跌幅
+				stockCount = result.readInt();
+				
+				for( i = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['C1'+ str + 'stockCode'] = result.readInt();
+					temp['C1'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['C1'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['C1'+ str + (++k)] = result.readFloat();
+					temp['C1'+ str + (++k)] = result.readFloat();
+				}
+				
+				//概念5分钟跌幅
+				stockCount = result.readInt();
+				
+				for( i = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['C2'+ str + 'stockCode'] = result.readInt();
+					temp['C2'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['C2'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['C2'+ str + (++k)] = result.readFloat();
+					temp['C2'+ str + (++k)] = result.readFloat();
+				}
+				
+				//主力净买排行榜(概念)
+				stockCount = result.readInt();
+				
+				for( i = 1 ; i <= stockCount ; ++i )
+				{
+					k = 0;
+					str = i.toString();
+					temp['C3'+ str + 'stockCode'] = result.readInt();
+					temp['C3'+ str + (++k)] = result.readMultiByte( 9 , "cn-gb");
+					temp['C3'+ str + 'LastClosePrice'] = result.readFloat().toFixed(2);
+					temp['C3'+ str + (++k)] = result.readFloat();
+					temp['C3'+ str + (++k)] = result.readFloat();
+				}
+				
+				_myData = new ObjectProxy(temp);
+			}
+			
+			
+			protected function list_doubleClickHandler(event:MouseEvent):void
+			{
+				this.parentApplication.stockCode = event.currentTarget.name ;
+				//Alert.show(event.currentTarget.name);
+				//FlexGlobals.topLevelApplication.changeCycle("日线");
+			}
+			
+			protected function bordercontainer1_clickHandler(event:MouseEvent):void
+			{
+				this.parentApplication.stockCode = event.currentTarget.name ;
+				if( old !=null){
+					old.styleName = '';
+					old = event.currentTarget;
+					old.styleName ="over";
+				}else{
+					old = event.currentTarget;
+					old.styleName ="over";
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		
+		.up{color:red;}
+		.down{color:green}
+		.eq{color:#FFCC00}
+		
+		.over{backgroundColor:#400080;}
+	</fx:Style>
+	<s:BorderContainer width="100%" height="100%" >
+		<s:layout>
+			<s:HorizontalLayout gap="0"/>
+		</s:layout>
+		
+		<!-- 第一列 -->
+		<s:BorderContainer width="33%" height="100%" borderColor="#FF0000">
+			<s:layout>
+				<s:VerticalLayout gap="0"/>
+			</s:layout>
+			
+			<s:BorderContainer id="HYZF" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="今日涨幅排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" name="{_myData.A11stockCode}">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A111}"
+							 fontWeight="bold" paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A11LastClosePrice}"  fontSize="14" text="{_myData.A112.toFixed(2)}"
+							 fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A113.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4" 	 />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A12stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A121}"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A12LastClosePrice}"  fontSize="14" text="{_myData.A122.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A123.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A13stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A131}"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A13LastClosePrice}"  fontSize="14" text="{_myData.A132.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A133.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A14stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A141}"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A14LastClosePrice}"  fontSize="14" text="{_myData.A142.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A143.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A15stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A151}"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A15LastClosePrice}"  fontSize="14" text="{_myData.A152.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A153.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A16stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A161}"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A16LastClosePrice}"  fontSize="14" text="{_myData.A162.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A163.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A17stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A171}"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A17LastClosePrice}"  fontSize="14" text="{_myData.A172.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A173.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A18stockCode}"
+								   click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A181}"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A18LastClosePrice}"  fontSize="14" text="{_myData.A182.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A183.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+			</s:BorderContainer>
+			<s:Label width="100%" height="1" text=" " backgroundColor="#FF0000" chromeColor="#FF0000"/>
+			
+			<s:BorderContainer id="HYDF" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="今日跌幅排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A21stockCode}"   click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A211}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A21LastClosePrice}"  fontSize="14" text="{_myData.A212.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A213.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A22stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A221}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A22LastClosePrice}"  fontSize="14" text="{_myData.A222.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A223.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A23stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A231}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A23LastClosePrice}"  fontSize="14" text="{_myData.A232.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A233.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A24stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A241}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A24LastClosePrice}"  fontSize="14" text="{_myData.A242.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A243.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A25stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A251}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A25LastClosePrice}"  fontSize="14" text="{_myData.A252.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A253.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A26stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A261}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A26LastClosePrice}"  fontSize="14" text="{_myData.A262.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A263.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A27stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A271}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A27LastClosePrice}"  fontSize="14" text="{_myData.A272.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A273.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A28stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A281}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A28LastClosePrice}"  fontSize="14" text="{_myData.A282.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A283.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				
+			</s:BorderContainer>
+			<s:Label width="100%" height="1" text=" " backgroundColor="#FF0000" chromeColor="#FF0000"/>
+			
+			<s:BorderContainer id="HYZF5" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="今日振幅排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A31stockCode}"  click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A311}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A31LastClosePrice}"  fontSize="14" text="{_myData.A312.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label width="33%" color="#FFFFFF" minWidth="70" height="100%" fontSize="14" text="{_myData.A313.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A32stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A321}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A32LastClosePrice}"  fontSize="14" text="{_myData.A322.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A323.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A33stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A331}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A33LastClosePrice}"  fontSize="14" text="{_myData.A332.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A333.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A34stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A341}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A34LastClosePrice}"  fontSize="14" text="{_myData.A342.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A343.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A35stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A351}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A35LastClosePrice}"  fontSize="14" text="{_myData.A352.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A353.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A36stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A361}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A36LastClosePrice}"  fontSize="14" text="{_myData.A362.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A363.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A37stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A371}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A37LastClosePrice}"  fontSize="14" text="{_myData.A372.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A373.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.A38stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.A381}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.A38LastClosePrice}"  fontSize="14" text="{_myData.A382.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.A383.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+			</s:BorderContainer>
+			
+		</s:BorderContainer>
+		
+		<!-- 第二列 -->
+		<s:BorderContainer width="33%" height="100%" borderColor="#FF0000">
+			<s:layout>
+				<s:VerticalLayout gap="0"/>
+			</s:layout>
+			
+			<s:BorderContainer id="GNZF" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="5分钟涨速排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B11stockCode}"  click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B111}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B11LastClosePrice}"  fontSize="14" text="{_myData.B112.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B113.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B12stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B121}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B12LastClosePrice}"  fontSize="14" text="{_myData.B122.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B123.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B13stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B131}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B13LastClosePrice}"  fontSize="14" text="{_myData.B132.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B133.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B14stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B141}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B14LastClosePrice}"  fontSize="14" text="{_myData.B142.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B143.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B15stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B151}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/> 
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B15LastClosePrice}"  fontSize="14" text="{_myData.B152.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B153.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B16stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B161}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B16LastClosePrice}"  fontSize="14" text="{_myData.B162.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B163.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B17stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B171}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B17LastClosePrice}"  fontSize="14" text="{_myData.B172.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B173.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B18stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B181}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B18LastClosePrice}"  fontSize="14" text="{_myData.B182.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B183.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+			</s:BorderContainer>
+			<s:Label width="100%" height="1" text=" " backgroundColor="#FF0000" chromeColor="#FF0000"/>
+			
+			<s:BorderContainer id="GNDF" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="5分钟跌速排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  name="{_myData.B21stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B211}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B21LastClosePrice}"  fontSize="14" text="{_myData.B212.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B213.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  name="{_myData.B22stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B221}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B22LastClosePrice}"  fontSize="14" text="{_myData.B222.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B223.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  name="{_myData.B23stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B231}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B23LastClosePrice}"  fontSize="14" text="{_myData.B232.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B233.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  name="{_myData.B24stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B241}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B24LastClosePrice}"  fontSize="14" text="{_myData.B242.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B243.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  name="{_myData.B25stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B251}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B25LastClosePrice}"  fontSize="14" text="{_myData.B252.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B253.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  name="{_myData.B26stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B261}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B26LastClosePrice}"  fontSize="14" text="{_myData.B262.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B263.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  name="{_myData.B27stockCode}"
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B271}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B27LastClosePrice}"  fontSize="14" text="{_myData.B272.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B273.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"  name="{_myData.B28stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B281}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B28LastClosePrice}"  fontSize="14" text="{_myData.B282.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B283.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				
+			</s:BorderContainer>
+			<s:Label width="100%" height="1" text=" " backgroundColor="#FF0000" chromeColor="#FF0000"/>
+			
+			<s:BorderContainer id="GNZF5" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="今日量比排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false"   name="{_myData.B31stockCode}"  click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B311}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B31LastClosePrice}"  fontSize="14" text="{_myData.B312.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B313.toFixed(2)}" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B32stockCode}" 
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B321}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B32LastClosePrice}"  fontSize="14" text="{_myData.B322.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B323.toFixed(2)}" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B33stockCode}" 
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B331}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B33LastClosePrice}"  fontSize="14" text="{_myData.B332.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B333.toFixed(2)}" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B34stockCode}" 
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B341}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B34LastClosePrice}"  fontSize="14" text="{_myData.B342.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B343.toFixed(2)}" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B35stockCode}" 
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B351}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B35LastClosePrice}"  fontSize="14" text="{_myData.B352.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B353.toFixed(2)}" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B36stockCode}" 
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B361}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B36LastClosePrice}"  fontSize="14" text="{_myData.B362.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B363.toFixed(2)}" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B37stockCode}" 
+								   click="bordercontainer1_clickHandler(event)"
+								   doubleClick="list_doubleClickHandler(event)"
+								   doubleClickEnabled="true" fontWeight="bold">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B371}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B37LastClosePrice}"  fontSize="14" text="{_myData.B372.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B373.toFixed(2)}" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.B38stockCode}"  click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.B381}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.B38LastClosePrice}"  fontSize="14" text="{_myData.B382.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.B383.toFixed(2)}" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				
+			</s:BorderContainer>
+			
+		</s:BorderContainer>
+		
+		<!-- 第三列 -->
+		<s:BorderContainer width="33%" height="100%" borderColor="#FF0000">
+			<s:layout>
+				<s:VerticalLayout gap="0"/>
+			</s:layout>
+			
+			<s:BorderContainer id="HYDF5" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="今日委比排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C11stockCode}"   click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C111}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C11LastClosePrice}"  fontSize="14" text="{_myData.C112.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C113.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C12stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C121}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C12LastClosePrice}"  fontSize="14" text="{_myData.C122.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C123.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C13stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C131}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C13LastClosePrice}"  fontSize="14" text="{_myData.C132.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C133.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C14stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C141}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C14LastClosePrice}"  fontSize="14" text="{_myData.C142.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C143.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C15stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C151}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C15LastClosePrice}"  fontSize="14" text="{_myData.C152.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C153.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C16stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C161}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C16LastClosePrice}"  fontSize="14" text="{_myData.C162.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C163.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C17stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C171}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C17LastClosePrice}"  fontSize="14" text="{_myData.C172.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C173.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C18stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C181}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C18LastClosePrice}"  fontSize="14" text="{_myData.C182.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C183.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+			</s:BorderContainer>
+			<s:Label width="100%" height="1" text=" " backgroundColor="#FF0000" chromeColor="#FF0000"/>
+			
+			<s:BorderContainer id="GNDF5" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="今日委比后排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C21stockCode}"  click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C211}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C21LastClosePrice}"  fontSize="14" text="{_myData.C212.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C213.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C22stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C221}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C22LastClosePrice}"  fontSize="14" text="{_myData.C222.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C223.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C23stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C231}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C23LastClosePrice}"  fontSize="14" text="{_myData.C232.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C233.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C24stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C241}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C24LastClosePrice}"  fontSize="14" text="{_myData.C242.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C243.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C25stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C251}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C25LastClosePrice}"  fontSize="14" text="{_myData.C252.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C253.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C26stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C261}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C26LastClosePrice}"  fontSize="14" text="{_myData.C262.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C263.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C27stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C271}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C27LastClosePrice}"  fontSize="14" text="{_myData.C272.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C273.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C28stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C281}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C28LastClosePrice}"  fontSize="14" text="{_myData.C282.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<comp:mylabel width="33%" minWidth="70" height="100%" fontSize="14" text="{_myData.C283.toFixed(2)}%" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				
+				
+			</s:BorderContainer>
+			<s:Label width="100%" height="1" text=" " backgroundColor="#FF0000" chromeColor="#FF0000"/>
+			
+			<s:BorderContainer id="ZLJM" width="100%" height="33%" borderVisible="false" borderWeight="0">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				<s:BorderContainer width="100%" height="24"  borderVisible="false" borderWeight="0">
+					<s:Label color="#C0C000" fontSize="18" fontWeight="bold" horizontalCenter="0"
+							 paddingBottom="2" paddingTop="2" text="今日总金额排名"/>
+				</s:BorderContainer>
+				<s:Label width="100%" height="1"  text="111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111" backgroundColor="#FF0000" chromeColor="#FF0000"/>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C31stockCode}"  click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C311}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C31LastClosePrice}"  fontSize="14" text="{_myData.C312.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{(_myData.C313 / 10000).toFixed(2)}亿" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C32stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C321}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C32LastClosePrice}"  fontSize="14" text="{_myData.C322.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{(_myData.C323 / 10000 ).toFixed(2)}亿" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C33stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout> 
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C331}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C33LastClosePrice}"  fontSize="14" text="{_myData.C332.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{(_myData.C333 / 10000 ).toFixed(2)}亿" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C34stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C341}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C34LastClosePrice}"  fontSize="14" text="{_myData.C342.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{(_myData.C343/10000).toFixed(2)}亿" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C35stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C351}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C35LastClosePrice}"  fontSize="14" text="{_myData.C352.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{(_myData.C353 / 10000).toFixed(2)}亿" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C36stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C361}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C36LastClosePrice}"  fontSize="14" text="{_myData.C362.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{(_myData.C363 / 10000).toFixed(2)}亿" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C37stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C371}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C37LastClosePrice}"  fontSize="14" text="{_myData.C372.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{(_myData.C373 / 10000).toFixed(2)}亿" fontWeight="bold"
+								  paddingBottom="2" paddingLeft="20" paddingTop="4"  />
+				</s:BorderContainer>
+				
+				<s:BorderContainer width="100%" height="12.5%" borderVisible="false" name="{_myData.C38stockCode}" click="bordercontainer1_clickHandler(event)" doubleClick="list_doubleClickHandler(event)" doubleClickEnabled="true">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label width="33%" minWidth="100" height="100%" color="#FFFF45" fontSize="16" text="{_myData.C381}" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="16" paddingTop="4"/>
+					<comp:mylabel width="33%" minWidth="70" height="100%" measureValue="{_myData.C38LastClosePrice}"  fontSize="14" text="{_myData.C382.toFixed(2)}"
+								  fontWeight="bold" paddingBottom="2" paddingLeft="20" paddingTop="4" />
+					<s:Label color="#FFFFFF" width="33%" minWidth="70" height="100%" fontSize="14" text="{ (_myData.C383 / 10000).toFixed(2) }亿" fontWeight="bold"
+							 paddingBottom="2" paddingLeft="20" paddingTop="4" />
+				</s:BorderContainer>
+				
+			</s:BorderContainer>
+			
+		</s:BorderContainer>
+	</s:BorderContainer>
+</s:NavigatorContent>

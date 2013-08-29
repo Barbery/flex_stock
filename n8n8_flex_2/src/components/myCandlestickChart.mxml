@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:CandlestickChart xmlns:fx="http://ns.adobe.com/mxml/2009"
+					 xmlns:s="library://ns.adobe.com/flex/spark" 
+					 xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="dataChange", type="flash.events.Event")]
+
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.collections.ICollectionView;
+			import mx.collections.IList;
+			import mx.collections.ListCollectionView;
+
+			
+			override public function set dataProvider(value:Object):void
+			{
+			
+				if (value is Array)
+				{
+					value = new ArrayCollection(value as Array);
+				}
+				else if (value is ICollectionView)
+				{
+				}
+				else if (value is IList)
+				{
+					value = new ListCollectionView(value as IList);
+				}
+				else if (value != null)
+				{
+					value = new ArrayCollection([ value ]);
+				}
+				else
+				{
+					value = new ArrayCollection();
+				}
+			
+				super.dataProvider = ICollectionView(value);
+				
+				dispatchEvent( new Event('dataChange'));
+				
+				invalidateData();        
+			}
+		]]>
+	</fx:Script>
+</mx:CandlestickChart>

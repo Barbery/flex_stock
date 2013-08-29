@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:MXDataGridItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						  xmlns:s="library://ns.adobe.com/flex/spark" 
+						  xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:comp="components.*"
+						  focusEnabled="true">
+	<fx:Declarations>
+		<mx:DateFormatter id="DT" formatString="JJ:NN"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[			
+			[Bindable]
+			private var B:Boolean;
+			override public function set data( value:Object ) : void {
+				super.data = value;
+				if(value.Amount < 2)
+					B = false;
+				else
+					B = true;
+			}
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+
+		.deal{
+			up:#C000C0;
+			down:yellow;
+		}
+	</fx:Style>
+	<s:Group width="230" height="20">
+		<s:layout>
+			<s:HorizontalLayout gap="0" paddingBottom="2"  paddingTop="2"/>
+		</s:layout>
+		<s:Spacer width="4" />
+		<s:Label text="{DT.format(new Date(data.Time))}" width="40"  paddingTop="2" color="white" textAlign="left"/>
+		<comp:mylabel text="{data.Price.toFixed(2)}" width="60" paddingTop="2" textAlign="right" measureValue="{data.lastClosePrice}" />
+		<comp:mylabel text="{data.Vol}" width="100" paddingTop="2" textAlign="right" styleName="deal" measureValue="500" />
+		<s:Label width="20" text="B" paddingTop="2" color="red" textAlign="right" visible="{B}" includeInLayout="{B}" />
+		<s:Label width="20" text="S" paddingTop="2" color="#50FF50" textAlign="right" visible="{!B}" includeInLayout="{!B}"/>
+	</s:Group>
+
+</s:MXDataGridItemRenderer>

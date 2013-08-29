@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark"   creationComplete="init()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="250" height="100%">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			/**
+			 * 财务信息
+			 */
+			import mx.core.FlexGlobals;
+			
+			private var _code:int;
+			
+			public function get code():int
+			{
+				return _code;
+			}
+			
+			public function set code(value:int):void
+			{
+				_code = value;
+				init();
+			}
+			
+			private function init():void
+			{
+				
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1700 );
+				byte.writeUnsignedInt( 4 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeInt( _code );
+				
+				(new MySocket).send( byte , financeDataHandler );
+				
+				function financeDataHandler(result:ByteArray):void
+				{
+					result.position += 4;
+					var val:Number = result.readFloat();
+					PE.text = isNaN(val) ? '——':val.toFixed(2);
+					val = result.readFloat();
+					Share_capital.text = (val / 10000 ).toFixed(2) +"亿";
+					val = result.readFloat();
+					HS.text = (FlexGlobals.topLevelApplication.vol / val).toFixed(2) + '%';
+					//HS.text = '---';
+					Outstanding_shares.text = ( val / 10000).toFixed(2) +"亿";
+					Net_assets.text = result.readFloat().toFixed(2);
+					income.text  = result.readFloat().toFixed(2);
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<s:layout>
+		<s:VerticalLayout gap="0"/>
+	</s:layout>
+	<s:Group width="250" height="24" >
+		<s:layout>
+			<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+		</s:layout>
+		<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="市盈"/>
+		<s:Label id="PE" width="80" color="white" fontSize="14" paddingBottom="2"
+				 paddingTop="4" text="---" textAlign="right"/>
+		<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="股本"/>
+		<s:Label id="Share_capital" width="80" color="white" fontSize="14"
+				 paddingBottom="2" paddingRight="4" paddingTop="4" text="---"
+				 textAlign="right"/>
+	</s:Group>
+	<s:Group width="250" height="24" >
+		<s:layout>
+			<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+		</s:layout>
+		<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="换手"/>
+		<s:Label id="HS" width="80" color="white" fontSize="14" paddingBottom="2" paddingTop="4"
+				 text="---" textAlign="right"/>
+		<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="流通"/>
+		<s:Label id="Outstanding_shares" width="80" color="white" fontSize="14"
+				 paddingBottom="2" paddingRight="4" paddingTop="4" text="---"
+				 textAlign="right"/>
+	</s:Group>
+	<s:Group width="250" height="24" >
+		<s:layout>
+			<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+		</s:layout>
+		<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="净资"/>
+		<s:Label id="Net_assets" width="80" color="white" fontSize="14"
+				 paddingBottom="2" paddingTop="4" text="---" textAlign="right"/>
+		<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="收益"
+				 toolTip="最近报告期的每股收益"/>
+		<s:Label id="income" width="80" color="white" fontSize="14" paddingBottom="2"
+				 paddingRight="4" paddingTop="4" text="---" textAlign="right"/>
+	</s:Group>
+</s:Group>

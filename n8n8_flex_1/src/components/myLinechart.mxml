@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:LineSeries xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="init()"
+			  xmlns:s="library://ns.adobe.com/flex/spark" 
+			  xmlns:mx="library://ns.adobe.com/flex/mx">
+	<mx:lineStroke>
+		<mx:SolidColorStroke color="white" weight="2"/>
+	</mx:lineStroke>
+	<fx:Declarations>
+		<!-- X Y 坐标提示 -->
+		<mx:HBox id="xTips" backgroundColor="0xFF0000" width="60" height="22" visible="{isShow}">
+			<mx:Label id="xText" color="white" paddingBottom="4" paddingLeft="4" fontWeight="bold" fontSize="12"
+					  paddingRight="4" paddingTop="4" text="---"/>
+		</mx:HBox>
+		
+		<mx:HBox id="yTips" backgroundColor="0xFF0000" width="60" height="22" visible="{isShow}">
+			<mx:Label id="yText" color="white"  paddingBottom="4" paddingLeft="4" textAlign="right" fontSize="12" fontWeight="bold"
+					  paddingTop="4" text="-------"/>
+		</mx:HBox>
+		
+		<!-- Y轴副坐标 -->
+		<mx:HBox id="yTips2" backgroundColor="0xFF0000" width="60" height="22" visible="{isShow}">
+			<mx:Label id="yText2" color="white"  paddingBottom="4" paddingLeft="4" textAlign="right" fontSize="12" fontWeight="bold"
+					  paddingTop="4" text="-------"/>
+		</mx:HBox>
+		
+		<mx:DateFormatter id="DT" formatString="JJ:NN"/>
+
+	</fx:Declarations>
+	<fx:Metadata>
+		[Event(name="drawLined", type="flash.events.Event")]
+		[Event(name="clearLine", type="flash.events.Event")]
+		
+	</fx:Metadata>
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.HitData;
+			import mx.charts.chartClasses.CartesianTransform;
+			import mx.charts.series.items.LineSeriesItem;
+			import mx.graphics.IStroke;
+			import mx.graphics.LinearGradientStroke;
+			import mx.graphics.SolidColorStroke;
+			
+			public var currIndex:int;
+			public var currX:Number;
+			
+			[Bindable]
+			private var isShow:Boolean = false;
+			
+			public function showCusor():void
+			{
+				isShow = ! isShow;
+				
+				if( ! isShow )
+				{
+					this.dispatchEvent( new Event('clearLine'));
+				}
+				
+				refresh_cusor();
+			}
+			
+			private function refresh_cusor():void
+			{
+				if( ! isShow )
+				{
+					this.graphics.clear();
+					return;
+				}
+				
+				this.graphics.clear();
+				this.graphics.lineStyle( 1 , 0xffffff);
+				
+				//垂直
+				this.graphics.moveTo( currX, 0);
+				this.graphics.lineTo( currX , this.height);
+				
+				//水平
+				this.graphics.moveTo( 0 , this.mouseY );
+				this.graphics.lineTo( this.width , this.mouseY );
+				
+				this.dispatchEvent(new Event('drawLined'));
+			}
+
+			private function init():void
+			{
+				this.addChild(xTips);
+				this.addChild(yTips);
+				this.addChild(yTips2);
+			}
+			
+			override public function findDataPoints(x:Number,y:Number,sensitivity:Number):Array
+			{
+				
+				if ( ! interactive || !renderData )
+					return [];
+				
+				var pr:Number = getStyle("radius");
+				var minDist2:Number  = pr + sensitivity;
+				
+				minDist2 *= minDist2;
+				var minItem:LineSeriesItem = null;
+				var pr2:Number = pr * pr;
+				// validating fliteredcache existance to fix the null pointer exception issue
+				var len:int;
+				if(renderData!=null && renderData.filteredCache!=null)
+					len = renderData.filteredCache.length;
+				
+				if (len == 0)
+					return [];
+
+				var low:Number = 0;
+				var high:Number = len;
+				var cur:Number = Math.floor((low+high)/2);
+				
+				var bFirstIsNaN:Boolean = isNaN(renderData.filteredCache[0]);
+				var n:uint = renderData.filteredCache.length;
+
+				
+				for( var i:int=0 ; i<n ; i++)
+				{
+					var v:LineSeriesItem = renderData.filteredCache[cur];
+					if (!isNaN(v.yNumber) && !isNaN(v.xNumber))
+					{
+						//var dist:Number = (v.x  - x)*(v.x  - x);
+						var dist:Number = Math.abs(v.x  - x);
+						if (dist <= minDist2)
+						{
+							minDist2 = dist;
+							minItem = v;
+						}
+					}
+
+					if (v.x < x || (isNaN(v.x) && bFirstIsNaN))
+					{
+						low = cur;
+						cur = Math.floor((low + high)/2);
+						if (cur == low)
+							break;
+					}
+					else
+					{
+						high = cur;
+						cur = Math.floor((low + high)/2);
+						if (cur == high)
+							break;
+					}
+				}
+				
+				
+				if (minItem)
+				{
+					currIndex = minItem.index;
+					currX = minItem.x;
+
+					if( currX > 110 && currX+110 < this.width)
+					{
+						xTips.x = currX-30;
+					}
+					else if(currX+110 >  this.width)
+					{
+						xTips.x = currX-60;
+					}
+					else
+					{
+						xTips.x = currX;
+					}
+					
+					xTips.y = this.height - 22;
+					xText.text = DT.format( new Date( minItem.item.Time + 60000 ) ) ;
+					
+					yTips.x   = 0;
+					yTips2.x = this.width - 60;
+					if( this.mouseY + 22 < this.height )
+					{
+						yTips.y   = this.mouseY;
+						yTips2.y = this.mouseY;
+					}
+					else
+					{
+						yTips.y   = this.mouseY-22;
+						yTips2.y = this.mouseY-22;
+					}
+					
+					var y_value:Number = this.localToData(new Point( 0 , this.mouseY ) )[1];
+					yText.text = y_value.toFixed(2);
+					yText2.text = ((y_value / this.parentApplication.lastClosePrice - 1) * 100).toFixed(2) + '%';
+					
+					refresh_cusor();
+					
+					return [];
+				}
+				
+				return [];
+			}
+			
+			
+		]]>
+	</fx:Script>
+</mx:LineSeries>

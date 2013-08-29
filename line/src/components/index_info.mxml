@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="init()" hide="__distruct()"
+		 xmlns:s="library://ns.adobe.com/flex/spark" xmlns:comp="components.*"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="250" height="100%">
+	<fx:Script>
+		<![CDATA[
+			import mx.utils.ObjectProxy;
+			
+			[Bindable]
+			private var data:ObjectProxy;
+			
+			private var timer:Timer;
+
+			private var _code:int;
+			
+			public function get code():int
+			{
+				return _code;
+			}
+
+			public function set code(value:int):void
+			{
+				_code = value;
+				init();
+			}
+			
+			private function __distruct():void
+			{
+				timer.stop();
+				timer.removeEventListener(TimerEvent.TIMER , update);
+			}
+
+			private function init():void
+			{
+				if( timer != null )
+				{
+					timer.stop();
+					timer.removeEventListener(TimerEvent.TIMER , update);
+				}
+				
+				getData();
+				
+				var updateTime:int = 6000;
+				timer = new Timer(updateTime);
+				timer.addEventListener(TimerEvent.TIMER , update);
+				timer.start();
+				
+			}
+			
+			private function update(event:TimerEvent):void
+			{
+				getData();
+			}
+			
+			private function getData():void
+			{
+
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1706 );
+				byte.writeUnsignedInt( (12+1)*4 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeInt( 12 );
+				
+				byte.writeInt( 000001 ); //上证
+				byte.writeInt( 000010 );//上证180
+				byte.writeInt( 000002 );//a股指数
+				byte.writeInt( 000003 );//B股指数
+				byte.writeInt( 000011 );//基金指数
+				
+				byte.writeInt( 800899 );//深证成指
+				byte.writeInt( 1399002 );//成分A指
+				byte.writeInt( 1399003 );//成分B指
+				byte.writeInt( 1399106 );//深证综指
+				byte.writeInt( 1399004 );//深证100R
+				
+				byte.writeInt( 000000 );//流通总值
+				byte.writeInt( 800800 );//平均股价
+
+				
+				(new MySocket).send( byte , dataHandler );
+			}
+				
+			private function dataHandler(result:ByteArray):void
+			{
+				//      代码     名称       最新价↓   涨幅
+				var count:int = result.readInt();
+				var temp:Object = [];
+				var str:String;
+				
+				for( var i:int=0 ; i<count ; ++i )
+				{
+					str = (i+1).toString();
+					temp['stockCode'+str] = result.readInt();
+					temp['name'+str] = result.readMultiByte( 9 , "cn-gb");
+					temp['price'+str] = result.readFloat().toFixed(2);
+					temp['percent'+str] = result.readFloat().toFixed(2);
+					
+					result.position += 12;
+					
+					temp['lastClosePrice'+str] = result.readFloat().toFixed(2);
+					
+					result.position += 28;
+				}
+				
+
+				
+				data = new ObjectProxy(temp);
+				
+			}
+			
+			private function clickHandler(stock:int):void
+			{
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<s:layout>
+		<s:VerticalLayout gap="0" />
+	</s:layout>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode1)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name1}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price1}" measureValue="{data.lastClosePrice1}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent1}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode2)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name2}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price2}" measureValue="{data.lastClosePrice2}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent2}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode3)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name3}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price3}" measureValue="{data.lastClosePrice3}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent3}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode4)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name4}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price4}" measureValue="{data.lastClosePrice4}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent4}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode5)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name5}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price5}" measureValue="{data.lastClosePrice5}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent5}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<!-- 苦逼的分割线 -->
+	<s:Label backgroundColor="red" width="100%" text=" " height="1" />
+
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode6)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name6}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price6}" measureValue="{data.lastClosePrice6}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent6}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode7)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name7}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price7}" measureValue="{data.lastClosePrice7}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent7}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode8)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name8}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price8}" measureValue="{data.lastClosePrice8}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent8}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode9)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name9}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price9}" measureValue="{data.lastClosePrice9}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent9}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode10)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name10}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price10}" measureValue="{data.lastClosePrice10}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent10}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<!-- 苦逼的分割线 -->
+	<s:Label backgroundColor="red" width="100%" text=" " height="1" />
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode11)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name11}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price11}" measureValue="{data.lastClosePrice11}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent11}%"	 textAlign="right"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" doubleClickEnabled="true" doubleClick="{clickHandler(data.stockCode12)}" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="70" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2"
+				 paddingTop="2" text="{data.name12}"/>
+		<comp:mylabel minWidth="70" fontSize="14" paddingBottom="2"  textAlign="right"
+					  paddingTop="4" text="{data.price12}" measureValue="{data.lastClosePrice12}"/>
+		<comp:mylabel width="90" minWidth="110"  fontSize="15" paddingBottom="2"	  paddingRight="0" paddingTop="2" text="{data.percent12}%"	 textAlign="right"/>
+	</s:Group>
+	
+</s:Group>

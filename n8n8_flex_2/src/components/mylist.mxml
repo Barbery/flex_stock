@@ -1,0 +1,1211 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:NavigatorContent xmlns:fx="http://ns.adobe.com/mxml/2009"
+					xmlns:s="library://ns.adobe.com/flex/spark"
+					xmlns:mx="library://ns.adobe.com/flex/mx" blendMode="layer"
+					width="100%" height="100%" creationComplete="init()" >
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+		<mx:DateFormatter id="DW" formatString="EEE"/>
+		<mx:HTTPService id="srv3" resultFormat="text"  result="deleteStock(event)" concurrency="last" method="POST" />
+		<mx:HTTPService id="srv2" resultFormat="text"  result="addMyStock(event)" concurrency="last" method="POST" />
+		<mx:HTTPService id="srv" resultFormat="text"  result="addStock(event)" concurrency="last" />
+
+		
+		<mx:Image id="tips" useHandCursor="true" buttonMode="true"/>
+		<mx:Image id="arrow" source="@Embed('../../img/arrow.png')"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.UIComponent;
+			import mx.events.CloseEvent;
+			import mx.events.ResizeEvent;
+			import mx.rpc.events.ResultEvent;
+			
+			import spark.collections.Sort;
+			import spark.collections.SortField;
+			import spark.events.IndexChangeEvent;
+			
+			[Bindable]
+			private var _myData:ArrayCollection;
+			
+			[Bindable]
+			private var tap:Boolean = true ;
+			
+			private var _curPage:uint = 0;
+			private var _lastObj:Object;
+			private var _pageSize:uint;
+			private var _blocktype:int = -1;
+			private var _asc:int = 0;
+			private var _zjlxtype:int = 4;
+			private var _lastSelecredId:uint;
+			private var _lastNum:uint;
+			private var _preNum:uint;
+			private var _allCount:uint;
+			private var _pageIsLoaded:Boolean = true;
+			//判断是否进入自选股
+			private var isMyStock:Boolean = false;
+			private var _timer:Timer;
+			//控制版块tap变色
+			private var lastClickObj:Object = {};
+			private var _stock:Vector.<int>;
+			private var _myStock:Vector.<int>;
+
+			private var light_area:UIComponent;
+			private var mask_layer:UIComponent =  new UIComponent();
+			
+			public function __distruct():void
+			{
+				this.removeEventListener(MouseEvent.MOUSE_WHEEL , _wheelHandler);
+				list.removeEventListener(IndexChangeEvent.CHANGE , list_changeHandler );
+				list.removeEventListener(KeyboardEvent.KEY_DOWN , list_keyboardHandler);
+				this.removeEventListener(ResizeEvent.RESIZE , resize );
+				_timer.stop();
+				_timer.removeEventListener( TimerEvent.TIMER , arguments.callee);
+
+			}
+			
+			/**
+			 * 初始化函数
+			 *
+			 */
+			public function init():void{
+				
+				this.parentApplication.parameters['tap'] = tap;
+				
+				_blocktype = this.parentApplication.blocktype;
+				
+				this.addEventListener(MouseEvent.MOUSE_WHEEL , _wheelHandler , false , 0 ,true);
+				list.addEventListener(IndexChangeEvent.CHANGE , list_changeHandler , false , 0 ,true );
+				this.addEventListener(ResizeEvent.RESIZE , resize  , false , 0 ,true);
+				
+				if(this.isMyStock || this.parentApplication.changeToMystock )
+				{
+
+					this.getMyStock();
+					_timer = new Timer(6000,0);
+					_timer.addEventListener(TimerEvent.TIMER , function():void{ getMyStock(); });
+					_timer.start();
+					this.parentApplication.changeToMystock = false;
+					this.isMyStock = true;
+					lastClickObj.styleName = "label";
+					mystockLabel.styleName = 'labelSelected';
+					return;
+				}
+				
+				if( this._stock == null )
+				{
+					//专属个股
+					var myStock:String = this.parentApplication.parameters.myStock;
+					//自选股
+					var str:String = this.parentApplication.parameters.stock;
+					if( str != null )
+					{
+						_stock = new Vector.<int>();
+						var arr:Array = str.split(',');
+						var code:int;
+						for each( var k:String in arr )
+						{
+							k = k.replace('SH' , '');
+							k = k.replace('SZ' , '1');
+							if( k != '' )
+							{
+								code = int(k);
+								_stock.push(code);
+							}
+						}
+						
+						if( myStock != null )
+						{
+							_myStock =  new Vector.<int>();
+							arr = myStock.split(',');
+							for each( k in arr )
+							{
+								k = k.replace('SH' , '');
+								k = k.replace('SZ' , '1');
+								if( k != '' )
+								{
+									_myStock.push(int(k));
+									//把专属个股添加进全局变量
+									this.parentApplication.parameters[int(k)] = true;
+								}
+							}
+						}
+						
+						if( _stock.length < 1 )
+							//如果没有自选股，默认添加上证指数
+							_stock.push(1);
+					}
+
+				}
+
+				if( this.parentApplication.mystock.length > 0 )
+				{
+					for each(code in this.parentApplication.mystock )
+					{
+						if( this._stock.indexOf( code ) === -1)
+						{
+							this._stock.push( code );
+							this.parentApplication.parameters[code] = false;
+						}
+					}
+					this.parentApplication.mystock = [];
+				}
+				
+				// 右键添加自选股的菜单
+				var contextMenu : ContextMenu = new ContextMenu();
+				contextMenu.hideBuiltInItems(); // 隐藏一些内建的鼠标右键菜单项
+				var contextMenuItem : ContextMenuItem = new ContextMenuItem("添加到自选股" , false);
+				var add:ContextMenuItem = new ContextMenuItem("添加到专属个股" , false);
+				var deleteStock : ContextMenuItem = new ContextMenuItem("删除自选股" , true);
+
+				contextMenuItem.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , meauHandler );
+				
+				deleteStock.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , function():void{
+					var params:Object={};
+					var stockCode:int = parentApplication.stockCode;
+					
+					if( parentApplication.parameters[stockCode] == null )
+					{
+						Alert.show('这个股票不是你的自选股');
+						return;
+					}
+					
+					if( stockCode > 1000000 )
+					{
+						srv3.url = 'http://u.n8n8.cn/User/index.php?m=Timeline&a=removeOptional';
+						params.stockCode = 'SZ' + stockCode.toString().substr(1);
+					}
+					else
+					{
+						srv3.url = 'http://u.n8n8.cn/User/index.php?m=Timeline&a=removeOptional';
+						params.stockCode = 'SH' + stockCode;
+					}
+					
+					Alert.show('你确认删除自选股【 ' + params.stockCode + '】吗？', '', Alert.YES|Alert.NO , null, alertClickHandler);
+					function alertClickHandler(evt:CloseEvent):void
+					{
+						if(evt.detail == Alert.YES)
+							srv3.send(params);
+					}
+					
+				});
+				
+				add.addEventListener(ContextMenuEvent.MENU_ITEM_SELECT , function():void{
+					var params:Object={};
+					var stockCode:int = parentApplication.stockCode;
+					if( stockCode > 1000000 )
+					{
+						srv2.url = 'http://u.n8n8.cn/User/?m=Timeline&a=addTrialFree';
+						params.stockCode = 'SZ' + stockCode.toString().substr(1);
+					}
+					else
+					{
+						srv2.url = 'http://u.n8n8.cn/User/?m=Timeline&a=addTrialFree';
+						params.stockCode = 'SH' + stockCode;
+					}
+					
+					if( parentApplication.parameters[stockCode] )
+					{
+						Alert.show('该股票已经是您的专属个股啦~');
+						return;
+					}
+					
+					var myStock:String = parentApplication.parameters.myStock;
+					var count:int = myStock.split(',').length;
+					
+					if( count < 5  )
+						Alert.show('你确认添加 ' + params.stockCode + ' 为你的专属个股吗？', '', Alert.YES|Alert.NO , null, alertClickHandler);
+					else
+						Alert.show('你本月免费专属个股已加满，您可以使用积分增加专属个股（300积分=1个专属个股）, 是否立即用积分购买？', '提示', Alert.YES|Alert.NO , null, alertClickHandler);
+					
+					function alertClickHandler(evt:CloseEvent):void
+					{
+						if(evt.detail == Alert.YES)
+							srv2.send(params);
+					}
+					
+				} );
+				
+				contextMenu.customItems.unshift(contextMenuItem, add , deleteStock);
+
+				this.contextMenu = contextMenu;
+
+				if( _pageSize == 0 )
+					_pageSize = this.height/22 - 2 ;
+
+//				_timer = new Timer(300,1);
+//				_timer.addEventListener(TimerEvent.TIMER , function():void{
+				getList( _curPage , _pageSize , _asc , _blocktype ,  _zjlxtype );
+//				});
+//				_timer.start();
+				
+				//this.getList( this._curPage , this._pageSize , this._asc ,this._blocktype , this._zjlxtype );
+
+				list.addEventListener(KeyboardEvent.KEY_DOWN , list_keyboardHandler);
+
+				list.setFocus();
+				list.selectedIndex = 0;
+				
+				_timer = new Timer(6000,0);
+				_timer.addEventListener(TimerEvent.TIMER , function():void{
+					getList( _curPage , _pageSize , _asc , _blocktype ,  _zjlxtype );
+				});
+				_timer.start();
+				
+				//show_tips();
+			}
+			
+//			private var tips_step:int = 0;
+//			private function show_tips():void
+//			{
+//				Alert.show('第'+tips_step + '步')
+//				
+//				switch(tips_step)
+//				{
+//					case 0:
+//						var sp:Sprite = new Sprite();
+//						sp.graphics.clear();
+//						sp.graphics.beginFill(0x000000,0.6);
+//						sp.graphics.drawRect(0,0,this.width,this.height);
+//						sp.graphics.endFill();
+//						
+//						this.mouseEnabled = false;
+//						this.mouseFocusEnabled = false;
+//						//this.mouseChildren = false;
+//						mask_layer.addChild(sp);
+//						this.addElement(mask_layer);
+//						mask_layer.blendMode = BlendMode.LAYER;
+//						
+//						light_area = new UIComponent();
+//						mask_layer.addChild(light_area);
+//					case 1:
+//						play_tips(0 , 0 , 0 , 0 , 200 , 50 , 180 , 0 , 0);
+//						break;
+//					case 2:
+//						play_tips(0 , 0 , 0 , 0 , this.width-500 , this.height/2 , this.width-60 , this.height/2 + 50 , 150);
+//						break;
+//					case 3:
+//						play_tips(0 , 160 , this.width , 26 , 220 , 40 , 200 , 140 , -70);
+//						break;
+//					case 4:
+//						play_tips(0 , this.height-120 , this.width , 26 , 220 , this.height-250 , 200 , this.height-120 , -75);
+//						break;
+//					case 5:
+//						this.parentApplication.changeCycle('日线');
+//				}
+//			}
+			
+//			private function play_tips(lightX:int , lightY:int , lightW:int , lightH:int , tipsX:int ,  tipsY:int , arrowX:int , arrowY:int ,  arrowR:int):void
+//			{
+//
+//				tips.load('http://free.n6n6.cn/Public/Free/img/tips.png');
+//				
+//				light_area.y = lightY;//this.height-120;
+//				light_area.doubleClickEnabled = true;
+//				light_area.blendMode = BlendMode.ERASE;
+//				
+//				var g:Graphics = light_area.graphics;
+//				g.beginFill(0xffffff,1);
+//				g.drawRect(0,0,lightW,lightH);
+//				g.endFill();
+//
+//				tips.x = tipsX;
+//				tips.y = tipsY;
+//				
+//				if( tips_step < 1 )
+//				{
+//					light_area.addEventListener(MouseEvent.CLICK , nextStep);
+//					tips.addEventListener(MouseEvent.CLICK , nextStep);
+//					
+//					
+//					function nextStep():void
+//					{
+//						tips_step++;
+//						show_tips();
+//					}
+//					
+//				}
+//				
+//				this.addElement(tips);
+//				
+//				arrow.x = arrowX;
+//				arrow.y = arrowY;
+//				arrow.rotation = arrowR;
+//				
+//				this.addElement(arrow);
+//				
+//
+//			}
+			
+			private function meauHandler(event:ContextMenuEvent):void
+			{
+				
+				var code:int = this.parentApplication.stockCode;
+				if( code > 1000000 )
+				{
+					srv.url = 'http://free.n8n8.cn/index.php?m=Freeversion&a=addOptionalStock&stock_code=SZ' + code.toString().substr(1) ;
+				}
+				else
+				{
+					srv.url = 'http://free.n8n8.cn/index.php?m=Freeversion&a=addOptionalStock&stock_code=SH' + code;
+				}
+
+				srv.send();
+			}
+
+			
+			private function addStock(event:ResultEvent):void
+			{
+				var code:int = this.parentApplication.stockCode;
+				if( event.result.toString() === 'true' )
+				{
+					if( this._stock.indexOf( code) === -1)
+					{
+						this._stock.push( code );
+						this.parentApplication.parameters[code] = false;
+						Alert.show("【"+list.selectedItem.name + "】 成功添加进自选股" , "添加成功");
+						_myData.refresh();
+					}
+					else
+					{
+						Alert.show("添加失败，原因：该自选股已存在");
+					}
+				}
+				else
+				{
+					Alert.show("添加失败！" );
+				}
+			}
+
+			
+			private function getList( offset:int , pageSize:int , asc:int , blocktype:int , zjlxtype:int ):void{
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1701 );
+				byte.writeUnsignedInt( 20 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+
+				byte.writeInt( offset );
+				byte.writeInt( pageSize );
+				byte.writeInt( asc );
+				byte.writeInt( blocktype );
+				byte.writeInt( zjlxtype );
+				
+				isMyStock = false;
+				(new MySocket).send( byte , listDataHandler );
+			}
+			
+			private function listDataHandler( result:ByteArray ):void{
+				//Alert.show( result.bytesAvailable + '' );
+				if( ! this.isMyStock )
+					_allCount =  result.readInt();
+				var count:int = result.readInt();
+				_lastNum = _pageSize * (_curPage +1);
+				_preNum = _pageSize * _curPage;
+				var k:uint = _preNum;
+				var temp:Array = [];
+
+				for( var i:int=0 ; i<count ; ++i )
+				{
+					temp[i] = [];
+					/*
+					temp[i] =
+						{
+							//序号 ||      代码     名称       最新价↓   涨幅    成交额    换手率  主力净买    跟风净买    散户净买    资金净买   5日主力   10日主力    20日主力  ||   新增： 昨收  ,  5分钟增速 ，委比 ，振幅 ， 量比 , 三日涨幅 ， 周涨幅， 月涨幅
+							'id':++k , 'stockCode': result.readInt() ,'name': result.readMultiByte( 9 , "cn-gb") ,'price': result.readFloat() ,'percent': result.readFloat() ,'amount': result.readFloat() ,'HS': result.readFloat() ,
+							'ZLJM': result.readFloat() ,'GFJM': result.readFloat() ,'SHJM': result.readFloat() ,'ZJJM': result.readFloat() ,'five': result.readFloat() ,'ten': result.readFloat() ,'twenty': result.readFloat() 
+						};
+					
+					temp[i]['stock_id'] = temp[i]['stockCode'] > 1000000 ? temp[i]['stockCode'].toString().substr(1) : temp[i]['stockCode'] ;
+
+					result.position += 20;
+					
+					temp[i]['rise_3day'] = result.readFloat();
+					temp[i]['rise_week'] = result.readFloat();
+					temp[i]['rise_month'] = result.readFloat();
+					*/
+					
+					temp[i] =
+					{
+							//序号 ||      代码     名称       最新价↓   涨幅   换手率  主力净买     5日主力   ||   新增： 昨收  ,  委比 ， 量比 , 三日涨幅 ， 周涨幅， 月涨幅   所属板块
+							'id':++k , 'stockCode': result.readInt() ,'name': result.readMultiByte( 9 , "cn-gb") ,'price': result.readFloat() ,'percent': result.readFloat() ,'HS': result.readFloat() ,
+								'ZLJM': result.readFloat() ,'five': result.readFloat()
+					};
+					temp[i]['stock_id'] = temp[i]['stockCode'] > 1000000 ? temp[i]['stockCode'].toString().substr(1) : temp[i]['stockCode'] ;
+					
+					
+					temp[i]['lastClosePrice'] = result.readFloat().toFixed(2);
+					temp[i]['WB'] = result.readFloat();
+					temp[i]['LB'] = result.readFloat();
+					temp[i]['rise_3day'] = result.readFloat();
+					temp[i]['rise_week'] = result.readFloat();
+					temp[i]['rise_month'] = result.readFloat();
+					temp[i]['belong'] = result.readMultiByte( 8 , "cn-gb");
+				}
+				_myData = new ArrayCollection(temp);
+				_pageIsLoaded = true;
+			}
+			
+			private function list_keyboardHandler( event:KeyboardEvent ):void{
+
+				//Alert.show(  this._lastSelecredId + " | "  + _lastNum + " | " + _curPage + " | " + _pageSize );
+				if( this.isMyStock )
+					return;
+				
+				if( this._lastSelecredId === this._lastNum   && event.keyCode == 40 && this._pageIsLoaded )
+				{
+					_pageIsLoaded = false;
+					this._nextPage();
+				}
+				
+				if( this._lastSelecredId === this._preNum+1 && this._preNum !== 0  && event.keyCode == 38 && this._pageIsLoaded )
+				{
+					_pageIsLoaded = false;
+					this._prePage();
+				}
+				
+				if( this.isMyStock && event.keyCode === 46 )
+				{
+					Alert.show('如需删除自选股，请登录个人中心操作');
+				}
+				
+			}
+			
+			private function resize(event:ResizeEvent):void{
+				_pageSize = this.height/22 - 3 ;
+			}
+
+			
+			private function _wheelHandler(evt:MouseEvent):void
+			{
+				if( this.isMyStock )
+					return;
+				
+				if(evt.delta < 0)
+					_nextPage();
+				else
+					_prePage();
+			}
+			
+			private function _prePage():void
+			{
+				if(_curPage>0)
+				{
+					_curPage--;
+				}
+				else
+				{
+					_curPage = 0;
+					return;
+				}
+
+				this.getList( this._curPage , this._pageSize , this._asc ,this._blocktype , this._zjlxtype );
+				
+			}
+			
+			private function _nextPage():void
+			{
+				if( this._allCount <= (this._curPage + 1 ) * this._pageSize )
+					return;
+				if(_curPage<0)
+				{
+					_curPage = 0;
+				}
+				else
+				{
+					_curPage++;
+				}
+
+				this.getList( this._curPage , this._pageSize , this._asc ,this._blocktype , this._zjlxtype );
+				
+			}
+			
+			private function list_changeHandler(event:IndexChangeEvent):void
+			{
+				this.parentApplication.stockCode = event.target.selectedItem.stockCode;
+				event.stopImmediatePropagation();
+				this._lastSelecredId = event.target.selectedItem.id;
+			}
+			
+			
+			private function click_handler(event:MouseEvent):void
+			{
+				if(this.isMyStock)
+				{
+					var dataSortField:SortField = new SortField();
+					var numericDataSort:Sort = new Sort();
+					switch (event.target.text)
+					{
+						case "主力净买↑":
+						case "主力净买" :
+							dataSortField.name = "ZLJM";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="主力净买↓";
+							break;
+						case "主力净买↓":
+							dataSortField.name = "ZLJM";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="主力净买↑";
+							break;
+						case "涨幅↓":
+							dataSortField.name = "percent";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="涨幅↑";
+							break;
+						case "涨幅↑":
+						case "涨幅":
+							dataSortField.name = "percent";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="涨幅↓";
+							break;
+						case "最新↑":
+						case "最新" :
+							dataSortField.name = "price";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="最新↓";
+							break;
+						case "最新↓":
+							dataSortField.name = "price";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="最新↑";
+							break;
+						
+						case "昨收↑":
+						case "昨收" :
+							dataSortField.name = "lastClosePrice";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="昨收↓";
+							break;
+						case "昨收↓":
+							dataSortField.name = "lastClosePrice";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="昨收↑";
+							break;
+						
+						case "委比↑":
+						case "委比" :
+							dataSortField.name = "WB";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="委比↓";
+							break;
+						case "委比↓":
+							dataSortField.name = "WB";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="委比↑";
+							break;
+						
+						case "量比↑":
+						case "量比" :
+							dataSortField.name = "LB";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="量比↓";
+							break;
+						case "量比↓":
+							dataSortField.name = "LB";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="量比↑";
+							break;
+						
+						case "换手↑":
+						case "换手" :
+							dataSortField.name = "HS";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="换手↓";
+							break;
+						case "换手↓":
+							dataSortField.name = "HS";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="换手↑";
+							break;
+						case "5日净买↑":
+						case "5日净买" :
+							dataSortField.name = "five";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="5日净买↓";
+							break;
+						case "5日净买↓":
+							dataSortField.name = "five";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="5日净买↑";
+							break;
+						case "3日涨幅↑":
+						case "3日涨幅" :
+							dataSortField.name = "rise_3day";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="3日涨幅↓";
+							break;
+						case "3日涨幅↓":
+							dataSortField.name = "rise_3day";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="3日涨幅↑";
+							break;
+						case "周涨幅↑":
+						case "周涨幅" :
+							dataSortField.name = "rise_week";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="周涨幅↓";
+							break;
+						case "周涨幅↓":
+							dataSortField.name = "rise_week";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="周涨幅↑";
+							break;
+						case "月涨幅↑":
+						case "月涨幅" :
+							dataSortField.name = "rise_month";
+							dataSortField.descending = true;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="月涨幅↓";
+							break;
+						case "月涨幅↓":
+							dataSortField.name = "rise_month";
+							dataSortField.descending = false;
+							dataSortField.numeric = true;
+							
+							numericDataSort.fields = [dataSortField];
+							
+							_myData.sort = numericDataSort;
+							_myData.refresh();
+							event.target.text="月涨幅↑";
+							break;
+					}
+					if(_lastObj != null && _lastObj != event.target)
+						_lastObj.text = _lastObj.text.substr(0,_lastObj.text.length-1);
+					_lastObj = event.target;
+					return;
+				}
+				
+				
+				
+				//Alert.show(event.target.text);
+				switch (event.target.text)
+				{
+					case "主力净买↑":
+					case "主力净买" :
+						_zjlxtype = 89;
+						_asc=0;
+						event.target.text="主力净买↓";
+						break;
+					case "主力净买↓":
+						_zjlxtype = 89;
+						_asc=1;
+						event.target.text="主力净买↑";
+						break;
+					case "涨幅↓":
+						_zjlxtype = 4;
+						_asc=1;
+						event.target.text="涨幅↑";
+						break;
+					case "涨幅↑":
+					case "涨幅":
+						_zjlxtype = 4;
+						_asc=0;
+						event.target.text="涨幅↓";
+						break;
+					case "最新↑":
+					case "最新" :
+						_zjlxtype = 9;
+						_asc=0;
+						event.target.text="最新↓";
+						break;
+					case "最新↓":
+						_zjlxtype = 9;
+						_asc=1;
+						event.target.text="最新↑";
+						break;
+					case "昨收↑":
+					case "昨收" :
+						_zjlxtype = 5;
+						_asc=0;
+						event.target.text="昨收↓";
+						break;
+					case "昨收↓":
+						_zjlxtype = 5;
+						_asc=1;
+						event.target.text="昨收↑";
+						break;
+					case "委比↑":
+					case "委比" :
+						_zjlxtype = 16;
+						_asc=0;
+						event.target.text="委比↓";
+						break;
+					case "委比↓":
+						_zjlxtype = 16;
+						_asc=1;
+						event.target.text="委比↑";
+						break;
+					case "量比↑":
+					case "量比" :
+						_zjlxtype = 18;
+						_asc=0;
+						event.target.text="量比↓";
+						break;
+					case "量比↓":
+						_zjlxtype = 18;
+						_asc=1;
+						event.target.text="量比↑";
+						break;
+					case "换手↑":
+					case "换手" :
+						_zjlxtype = 38;
+						_asc=0;
+						event.target.text="换手↓";
+						break;
+					case "换手↓":
+						_zjlxtype = 38;
+						_asc=1;
+						event.target.text="换手↑";
+						break;
+					case "5日净买↑":
+					case "5日净买" :
+						_zjlxtype = 111;
+						_asc=0;
+						event.target.text="5日净买↓";
+						break;
+					case "5日净买↓":
+						_zjlxtype = 111;
+						_asc=1;
+						event.target.text="5日净买↑";
+						break;
+					case "3日涨幅↑":
+					case "3日涨幅" :
+						_zjlxtype = 41;
+						_asc=0;
+						event.target.text="3日涨幅↓";
+						break;
+					case "3日涨幅↓":
+						_zjlxtype = 41;
+						_asc=1;
+						event.target.text="3日涨幅↑";
+						break;
+					case "周涨幅↑":
+					case "周涨幅" :
+						_zjlxtype = 42;
+						_asc=0;
+						event.target.text="周涨幅↓";
+						break;
+					case "周涨幅↓":
+						_zjlxtype = 42;
+						_asc=1;
+						event.target.text="周涨幅↑";
+						break;
+					case "月涨幅↑":
+					case "月涨幅" :
+						_zjlxtype = 43;
+						_asc=0;
+						event.target.text="月涨幅↓";
+						break;
+					case "月涨幅↓":
+						_zjlxtype = 43;
+						_asc=1;
+						event.target.text="月涨幅↑";
+						break;
+				}
+
+				_curPage = 0;
+				this.getList( this._curPage , this._pageSize , this._asc ,this._blocktype , this._zjlxtype );
+
+				
+				if(_lastObj != null && _lastObj != event.target)
+					_lastObj.text = _lastObj.text.substr(0,_lastObj.text.length-1);
+				_lastObj = event.target;
+				
+			}
+			
+			private function changeHandler( val:int):void
+			{
+				this.parentApplication.blocktype = _blocktype = val;
+				this._curPage = 0;
+				this.getList( this._curPage , this._pageSize , this._asc ,this._blocktype , this._zjlxtype );
+				
+				_timer.stop();
+				_timer.removeEventListener( TimerEvent.TIMER , arguments.callee);
+				_timer = new Timer(6000,0);
+				_timer.addEventListener(TimerEvent.TIMER , function():void{
+					getList( _curPage , _pageSize , _asc , _blocktype ,  _zjlxtype );
+				});
+				_timer.start();
+			}
+			
+			private function getMyStock(check:Boolean=false):void{
+				if( this._stock == null ||  this._stock.length < 1)
+					return;
+				
+				//if TRUE 则为专属个股
+				if(check)
+					var count:int = this._myStock.length;
+				else
+					count = this._stock.length;
+				
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1706 );
+				byte.writeUnsignedInt( (count+1)*4 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeInt( count );
+				
+				if(check)
+				{
+					for each( var value:int in this._myStock )
+					{
+						byte.writeInt( value );
+					}
+				}
+				else
+				{
+					for each( value in this._stock )
+					{
+						byte.writeInt( value );
+					}
+				}
+
+				isMyStock = true;
+				(new MySocket).send( byte , listDataHandler );
+			}
+			
+			private function labelHandler(event:MouseEvent):void{
+				lastClickObj.styleName = "label"; 
+				event.currentTarget.styleName = "labelSelected";
+				lastClickObj = event.currentTarget;
+			}
+
+			
+			private function addMyStock(event:ResultEvent):void{
+				var str:String = event.result.toString();
+				if(str.length<2)
+					Alert.show('异常错误，请刷新重试');
+				
+				var result:Object = JSON.parse(str);
+				
+				switch( result.code )
+				{
+					case 0:
+						if( result.left <= 10 && result.left > 5  )
+							Alert.show('添加成功,你还可以添加'+(result.left-5)+'个免费专属个股');
+						else if( result.left == 5 )
+							Alert.show('添加成功,你本月免费专属个股已满，您还可以使用积分增加专属个股');
+						else
+							Alert.show('添加成功,系统自动扣除300积分');
+						break;
+					case 1:
+						Alert.okLabel = '立即前往';
+						Alert.noLabel = '不了，谢谢！';
+						Alert.buttonWidth = 100;
+						Alert.show('添加失败，积分不够，立即前往论坛赚取积分？', '', Alert.OK|Alert.NO, null, gotoBBS);
+						break;
+					default:
+						Alert.show(result.msg);
+						return;
+				}
+				
+				function gotoBBS(event:CloseEvent):void
+				{
+					if(event.detail == Alert.OK)
+						navigateToURL(new URLRequest('http://bbs.n8n8.cn/') ); 
+				}
+
+			}
+			
+			private function deleteStock(event:ResultEvent):void
+			{
+				var deleteResult:String = event.result.toString();
+				if( deleteResult === 'false' )
+				{
+					Alert.show('删除失败');
+				}
+				else if( deleteResult === 'true' )
+				{
+					Alert.show('删除成功');
+				}
+				else
+				{
+					Alert.show('异常错误，请联系管理员');
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		.up{color:red;}
+		.down{color:green}
+		.eq{color:#FFCC00}
+		
+		.labelSelected{
+			color:#7FFFFF;
+			backgroundColor:#800000;
+		}
+		
+		.label{
+			color:red;
+			backgroundColor:#0A0A0A;
+		}
+
+	</fx:Style>
+	<s:Group width="100%" height="100%">
+		<s:layout>
+			<s:VerticalLayout gap="0"/>
+		</s:layout>
+		<!-- 表头 -->
+		<s:Group width="100%" height="30">
+			<s:layout>
+				<s:HorizontalLayout/>
+			</s:layout>
+			<s:Label width="40" height="100%" color="#CCCCCC" fontSize="16" fontWeight="bold"
+					 paddingTop="6" text="序号"/>
+			<s:Label width="4%" height="100%" minWidth="50" color="#CCCCCC" fontSize="16"
+					 fontWeight="bold" paddingTop="6" text="代码" textAlign="left"/>
+			<s:Label width="7%" height="100%" minWidth="70" color="#CCCCCC" fontSize="16"
+					 fontWeight="bold" paddingTop="6" text="名称" textAlign="left"/>
+			<s:Label width="6%" height="100%" minWidth="64" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					 mouseChildren="false" paddingTop="6" text="主力净买" textAlign="right"
+					 toolTip="点击排序" useHandCursor="true"/>
+			<s:Label width="5%" height="100%" minWidth="64" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					 mouseChildren="false" paddingTop="6" text="涨幅↓" textAlign="right"
+					 toolTip="点击排序" useHandCursor="true"/>
+			<s:Label width="5%" height="100%" minWidth="54" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					 mouseChildren="false" paddingTop="6" text="最新" textAlign="right"
+					 toolTip="点击排序" useHandCursor="true"/>
+			
+			<s:Label width="6%" height="100%" minWidth="60"  click="click_handler(event)" 
+					 color="#CCCCCC" fontSize="16" fontWeight="bold"
+					 paddingTop="6" text="版块" textAlign="center"	 useHandCursor="true"/>
+			
+			<s:Label width="5%" height="100%" minWidth="54" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					 mouseChildren="false" paddingTop="6" text="昨收" textAlign="right"
+					 toolTip="点击排序" useHandCursor="true"/>
+			
+			<s:Label width="5%" height="100%" minWidth="54" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					 mouseChildren="false" paddingTop="6" text="委比" textAlign="right"
+					 toolTip="点击排序" useHandCursor="true"/>
+			
+			<s:Label width="4%" height="100%" minWidth="40" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					 mouseChildren="false" paddingTop="6" text="量比" textAlign="right"
+					 toolTip="点击排序" useHandCursor="true"/>
+			
+			<s:Label width="5%" height="100%" minWidth="54" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					 mouseChildren="false" paddingTop="6" text="换手" textAlign="right"
+					 toolTip="点击排序" useHandCursor="true"/>
+			<s:Label width="8%" height="100%" minWidth="60" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					 mouseChildren="false" paddingTop="8" text="5日净买"
+					 textAlign="right" toolTip="点击排序" useHandCursor="true"/>
+			
+			<s:Label  width="8%" height="100%" minWidth="60" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					  mouseChildren="false" paddingTop="8" text="3日涨幅"
+					 textAlign="right" toolTip="点击排序" useHandCursor="true"/>
+			<s:Label  width="8%" height="100%" minWidth="60" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					  mouseChildren="false" paddingTop="8" text="周涨幅"
+					 textAlign="right" toolTip="点击排序" useHandCursor="true"/>
+			<s:Label  width="8%" height="100%" minWidth="68" buttonMode="true"
+					 click="click_handler(event)" color="white" fontSize="16" fontWeight="bold"
+					  mouseChildren="false" paddingTop="8" text="月涨幅"
+					 textAlign="right" toolTip="点击排序" useHandCursor="true"/>
+			
+		</s:Group>
+		<!-- body -->
+		<s:List id="list" width="100%" height="95%" borderVisible="false" dataProvider="{_myData}"
+				doubleClickEnabled="true" horizontalScrollPolicy="off" itemRenderer="renderer.list_render"
+				rollOverColor="#0A0A0A" selectedIndex="0" verticalScrollPolicy="off"/>
+		
+		<s:Group width="100%" height="22">
+			<s:layout>
+				<s:HorizontalLayout gap="20"/>
+			</s:layout>
+			
+			<s:BorderContainer borderColor="red" borderWeight="1" toolTip="点击切换版块">
+				<s:layout>
+					<s:HorizontalLayout gap="20"/>
+				</s:layout>
+						<s:Label width="50" buttonMode="true"
+								 click="{this.changeHandler(-1);labelHandler(event)}" fontSize="16"
+								 fontWeight="bold" paddingTop="4" styleName="label" text="全部"
+								 textAlign="center" useHandCursor="true"/>
+						
+						<s:Label width="50" buttonMode="true"
+								 click="{this.changeHandler(1);labelHandler(event)}" fontSize="16"
+								 fontWeight="bold" paddingTop="4" styleName="label" text="沪A"
+								 textAlign="center" useHandCursor="true"/>
+						
+						<s:Label width="50" buttonMode="true"
+								 click="{this.changeHandler(8);labelHandler(event)}" fontSize="16"
+								 fontWeight="bold" paddingTop="4" styleName="label" text="深A"
+								 textAlign="center" useHandCursor="true"/>
+						
+						<s:Label width="50" buttonMode="true"
+								 click="{this.changeHandler(15);labelHandler(event)}" fontSize="16"
+								 fontWeight="bold" paddingTop="4" styleName="label" text="行业"
+								 textAlign="center" useHandCursor="true"/>
+			
+						<s:Label width="50" buttonMode="true"
+								 click="{this.changeHandler(17);labelHandler(event)}" fontSize="16"
+								 fontWeight="bold" paddingTop="4" styleName="label" text="区域"
+								 textAlign="center" useHandCursor="true"/>
+						
+						<s:Label width="50" buttonMode="true" id="mystockLabel"
+								 click="{this.getMyStock();labelHandler(event);          _timer.stop();          _timer.removeEventListener( TimerEvent.TIMER , arguments.callee);          _timer = new Timer(6000,0);          _timer.addEventListener(TimerEvent.TIMER , function():void{            getMyStock();          });          _timer.start();          }"
+								 fontSize="16" fontWeight="bold" paddingTop="4" styleName="label"
+								 text="自选股" textAlign="center" useHandCursor="true"/>
+						<s:Label width="90" buttonMode="true" 
+								 click="{this.getMyStock(true);labelHandler(event);          _timer.stop();          _timer.removeEventListener( TimerEvent.TIMER , arguments.callee);          _timer = new Timer(6000,0);          _timer.addEventListener(TimerEvent.TIMER , function():void{            getMyStock(true);          });          _timer.start();          }"
+								 fontSize="16" fontWeight="bold" paddingTop="4" styleName="label"
+								 text="专属个股" textAlign="center" useHandCursor="true"/>
+						<s:Spacer width="20"/>
+			</s:BorderContainer>
+			
+			<s:Spacer width="30"/>
+			<s:HScrollBar id="scroll" width="100%" height="22"
+						  change="{this.parentApplication.parameters['tap'] = tap = !tap ; _myData.refresh();  }"
+						  maximum="1" minimum="0" pageSize="0.5" skinClass="components.myScrollSkin"
+						  stepSize="1"/>
+
+		</s:Group>
+	</s:Group>
+</s:NavigatorContent>

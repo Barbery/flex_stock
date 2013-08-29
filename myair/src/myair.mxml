@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" width="660" height="440"
+					   xmlns:s="library://ns.adobe.com/flex/spark"  backgroundColor="#323333"
+					   xmlns:mx="library://ns.adobe.com/flex/mx">
+	
+	<fx:Script>
+		<![CDATA[
+			private var check:Boolean = false;
+			
+			protected function textarea1_focusInHandler(event:FocusEvent):void
+			{
+				if( ! check )
+				{
+					System.setClipboard(code.text);
+					check = true;
+				}
+				if( check )
+				{
+					response.styleName = "success";
+					response.text = "复制成功,直接按【ctrl+v】即可粘贴！！！";
+				}
+				else
+				{
+					response.styleName = "false";
+					response.text = "复制失败，请按【ctrl+c】键手动复制！！！";
+				}
+
+			}
+			
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				code.text = '<div><embed align="left" src="http://static.n8n8.cn/Public/woca/woca.swf?username='+ encodeURI(username.text) +'" width="660" height="330" type="application/x-shockwave-flash" wmode="transparent" quality="high"></div>' ;
+				check = false;
+			}
+			
+			protected function code_focusOutHandler(event:FocusEvent):void
+			{
+				response.text = '';
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		.success{
+			color : green;
+		}
+		
+		.false{
+			color : red;
+		}
+		
+	</fx:Style>
+	
+	<fx:Declarations>
+		<!-- 
+		将非可视元素（例如服务、值对象）放在此处 
+		blue #5286B9
+		input bgcolor #2F2F2F
+		input border #303030
+		-->
+		
+	</fx:Declarations>
+	<s:Group width="600" height="400">
+		<s:Image source="@Embed(source='logo.jpg')" alpha="0.8" />
+		<s:Label x="10" y="100" width="152" height="32" color="white" fontSize="22" paddingTop="4"
+				 text="输入你的账号 : "/><s:TextInput id="username" x="170" y="100"  borderVisible="true" borderColor="black" contentBackgroundColor="#383838" color="white" fontSize="22" />
+		<s:Button x="406" y="100" width="113" height="31" label="生成代码" chromeColor="#096FD8" click="button1_clickHandler(event)"
+				  color="#FFFFFF" fontFamily="中易宋体" fontSize="18" fontWeight="bold"
+				  textDecoration="none"/>
+		<mx:HRule x="10" y="149" width="580" height="10"/>
+		<s:Label x="10" y="167" width="152" height="32" color="#FFFFFF" fontSize="22"
+				 text="带cps的代码 : "/>
+		<s:TextArea id="code" x="170" y="163" width="349" height="168" borderColor="#000000"
+					color="white" contentBackgroundColor="#383838"  focusOut="code_focusOutHandler(event)"
+					focusIn="textarea1_focusInHandler(event)" fontSize="18"/>
+		<s:Label id="response" x="170" y="339" width="349" height="23" fontWeight="bold"  fontSize="18"/>
+		<s:Label x="488" y="378" width="102" color="#B0A6A6" text="created by Barbery"/>
+		
+	</s:Group>
+</s:WindowedApplication>

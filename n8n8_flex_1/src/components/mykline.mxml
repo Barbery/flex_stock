@@ -1,0 +1,2332 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:NavigatorContent xmlns:fx="http://ns.adobe.com/mxml/2009"
+					xmlns:s="library://ns.adobe.com/flex/spark"
+					xmlns:comp="components.*"
+					xmlns:mx="library://ns.adobe.com/flex/mx"
+					width="100%" height="100%" hide="__distruct()" show="init()">
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		
+		.up{color:red;}
+		.down{color:#50FF50}
+		.eq{color:#FFCC00}
+		
+	</fx:Style>
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.ChartItem;
+			import mx.charts.series.items.ColumnSeriesItem;
+			import mx.collections.ArrayList;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.graphics.IFill;
+			import mx.utils.ObjectProxy;
+			
+			import spark.core.SpriteVisualElement;
+			import spark.events.IndexChangeEvent;
+			import spark.core.NavigationUnit;
+			
+			[Bindable]
+			private var _maipan:ArrayList;
+			
+			
+			private var _staObj:Stage;
+			private var _big:Array;
+			private var _page:Number=1;
+			private var _cycle:int;
+			private var _pageIsLoaded:Boolean = true;
+			private var _end:int;
+			private var _start:int;
+			private var _index:int=-1;
+			private var _lastTime:int = 0;
+			private var _normCheckList:Vector.<Boolean>;
+			private var timer:Timer;
+			private var _lastClosePrice:String;
+
+			private var _Outstanding_shares:Number;
+			private var _length:uint;
+			private var normData:Array;
+			private var normData1:Array;
+			private var normData2:Array;
+			private var normData3:Array;
+			private var normData4:Array;
+
+			[Bindable]
+			private var _stockCode:int;
+			
+			[Bindable]
+			private var xDate:Object; //数据提示
+			
+			[Bindable]
+			private var normTips:Object;
+			
+			[Bindable]//主图数据集
+			private var _mainData:ArrayList;
+			
+			[Bindable]//传统指标数据
+			private var _data4:ArrayList;
+
+			[Bindable] //短线
+			private var _data:ArrayList;
+			
+			[Bindable] //中线
+			private var _data1:ArrayList;
+			
+			[Bindable] //趋势
+			private var _data2:ArrayList;
+
+			[Bindable] //至尊数据
+			private var _data3:ArrayList;
+			
+			[Bindable]
+			private var change_ma:Boolean = true;//切换 均线 《=》智能辅助指标
+			
+			[Bindable]
+			private var _preLastClosePrice:Number;
+			
+			[Bindable]
+			private var _tran_info:ObjectProxy;
+			
+			public function __distruct():void
+			{
+				left_group.removeEventListener(MouseEvent.MOUSE_MOVE , left_group_mouseMoveHandler); 
+				left_group.removeEventListener(MouseEvent.MOUSE_OVER , left_group_mouseMoveHandler);
+				this.systemManager.stage.removeEventListener(KeyboardEvent.KEY_DOWN , _keyDownHandler );
+//				buy_sell.__distruct();
+//				tran_list.__distruct();
+				//_myData.removeAll();
+			}
+			
+			private function cycleFormat( val:int ):void
+			{
+				switch( val )
+				{
+					case 11:
+						cycle.text = '日线' ;
+						break;
+					case 5:
+						cycle.text  = '5分钟';
+						break;
+					case 7:
+						cycle.text  = '15分钟';
+						break;
+					case 9:
+						cycle.text  = '30分钟';
+						break;
+					case 10:
+						cycle.text  = '60分钟';
+						break;
+					case 12:
+						cycle.text  = '周线';
+						break;
+					case 13:
+						cycle.text  = '月线';
+						break;
+				}
+			}
+			
+			public function init():void{
+				
+				_staObj = this.systemManager.stage;
+				_staObj.addEventListener(KeyboardEvent.KEY_DOWN ,_keyDownHandler , false , 0 ,true);
+				
+				
+				//同一个股票 不加载K线数据
+				if( _stockCode === this.parentApplication.stockCode && _cycle === this.parentApplication.cycle ){
+					return;
+				}
+				
+				
+				_stockCode=this.parentApplication.stockCode;
+				_cycle = this.parentApplication.cycle
+					
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1712 );
+				byte.writeUnsignedInt( 16 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 1 );
+				byte.writeInt( _cycle );
+				byte.writeInt( _stockCode );
+				byte.writeInt( 0 );
+
+				(new MySocket).send( byte , socketDataHandler );
+
+				
+				this.addElement(tips);
+				this.cycleFormat( _cycle );
+				
+				//十字准星画布
+//				g.graphics.lineStyle(1,0xFFFFFF);
+//				this.addElement( g ) ;
+				
+				//X Y 数值小提示
+//				this.addElement( yTips );
+//				this.addElement( xTips );
+				this.setFocus();
+
+
+				byte = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1700 );
+				byte.writeUnsignedInt( 4 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeInt( _stockCode );
+				
+				(new MySocket).send( byte , financeDataHandler );
+
+				if( timer === null )
+				{
+					timer = new Timer(6000);
+				}
+				else
+				{
+					timer.stop();
+				}
+				timer.addEventListener(TimerEvent.TIMER , function():void{
+					update_info();
+					getDealData();
+				});
+				timer.start();
+				
+				update_info();
+				getDealData();
+
+				_normCheckList = new Vector.<Boolean>(5);
+
+				
+			}
+
+			import mx.controls.Alert;
+			private function financeDataHandler( result:ByteArray):void{
+				if( this.parentApplication.isStock )
+				{
+					result.position += 4;
+					var val:Number = result.readFloat();
+					this.PE.text = isNaN(val) ? '——':val.toFixed(2);
+					val = result.readFloat();
+					this.Share_capital.text = (val / 10000 ).toFixed(2) +"亿";
+					val = result.readFloat();
+					this._Outstanding_shares = val;
+					this.Outstanding_shares.text = ( val / 10000).toFixed(2) +"亿";
+					this.Net_assets.text = result.readFloat().toFixed(2);
+					this.income.text  = result.readFloat().toFixed(2);
+				}
+				else
+				{
+					this.income.text  = this.Net_assets.text = this.Outstanding_shares.text = this.Share_capital.text =  this.PE.text = '——';
+				}
+
+			}
+
+			private function getKline():void{
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1712 );
+				byte.writeUnsignedInt( 16 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 1 );
+				byte.writeInt( _cycle );
+				byte.writeInt( _stockCode );
+				byte.writeInt( this._lastTime );
+				
+				(new MySocket).send( byte , socketDataHandler );
+			}
+			
+			private function socketDataHandler( result:ByteArray ):void {
+				var xx:uint = result.readUnsignedInt();
+				var code:int = result.readInt();
+				var cycle:int = result.readInt();
+				var count:int = result.readInt();
+				
+				_big = [];
+				_big  =  (Decompress.getInstance()).getKline( cycle , code , count , result );
+				
+				
+				this._lastTime = _big[count-1]['Date'] / 1000 ;
+				
+				
+				
+				this.normShowHandler( this._index );
+
+				extrude();
+				
+			}
+
+			private function extrude():void{
+
+				//控制最小
+				if(_page <= 0.2 ){
+					_page = 0.2;
+					this._pageIsLoaded = true
+					return;
+				}
+				var count:int = _big.length;
+				_end = count - (Math.pow(_page , 1.2 )*120) ;
+				if( _end < 0 )
+				{
+					_end = 0;
+					_page >1 ? _page-- : null ;
+				}
+				//控制最大
+				if( _end ===0  && _mainData != null &&  _mainData.length === count ){
+					this._pageIsLoaded = true
+					return;
+				}
+
+				_mainData = new ArrayList( _big.slice( _end ) );
+				
+			}
+			
+			private function _keyDownHandler(event:KeyboardEvent):void{
+				
+				//Alert.show( this.parentApplication.isLoadSearch +' || ' + ! _pageIsLoaded  );
+				if ( this.parentApplication.isLoadSearch || ! _pageIsLoaded )
+					return;
+				
+				switch(event.keyCode)
+				{
+					case 38:
+						_pageIsLoaded = false;
+						this._less();
+						break;
+					case 40:
+						_pageIsLoaded = false;
+						this._more();
+						break;
+				}
+			}
+			
+			private function _more():void{
+				_page++;	
+				extrude();
+			}
+			
+			private function _less():void{
+
+				if(_page >= 2)
+					_page--;
+				else
+					_page -= 0.2;
+				
+				extrude();
+			}
+			
+
+			//十字准星
+			private function left_group_mouseMoveHandler(event:MouseEvent):void	
+			{
+				
+				this.main_line.findDataPoints(mouseX-2 , mouseY-2 , 5);
+				var currX:Number = this.main_line.currX;
+
+				var index:int = this.main_line.currIndex;
+				xDate = _mainData.getItemAt( index );
+				_preLastClosePrice = index >0 ? _mainData.getItemAt( index-1 )['Close'] : xDate.Close;
+				var obj:Array=[];
+				switch( this._index )
+				{
+					case 0:
+						normTips = this._data.getItemAt( index );
+						obj = [ZLZZ];
+						break;
+					case 1:
+						normTips = this._data1.getItemAt( index );
+						obj=[JJCC , SHSL ];
+						break;
+					case 2:
+						normTips = this._data2.getItemAt( index );
+						obj=[ZLKP , SSTP ];
+						break;
+					case 3:
+						normTips = this._data3.getItemAt( index );
+						obj=[ZLTJ , GFTJ , SHTJ];
+						break;
+					case 4:
+						normTips = this._data4.getItemAt( index );
+						obj=[KDJ , MACD , RSI];
+						break;
+				}
+				obj.push(volSeries);
+				for each( var k:Object in obj )
+				{
+					k.graphics.clear();
+					k.graphics.lineStyle( 1 , 0xffffff );
+					k.graphics.moveTo( currX , 0 );
+					k.graphics.lineTo( currX , 500 );
+				}
+				
+			}
+
+			private function changeHandler(event:IndexChangeEvent):void
+			{
+				switch(event.target.selectedItem)
+				{
+					case '主力追踪':
+						this._index = 0;
+						change_ma = false;
+						if( this.normData == null || ! _normCheckList[0] )
+						{
+							this.normShowHandler(0);
+						}
+						else if( this._data.length !== this._mainData.length )
+						{
+							this.main_line_updateCompleteHandler(Event as FlexEvent);
+						}
+						myViewStack.selectedIndex = 0;
+						break ;
+					case '中线主力':
+						this._index = 1;
+						change_ma = true;
+						if( this.normData1 == null || ! _normCheckList[1]  )
+						{
+							this.normShowHandler(1);
+						}
+						else if( this._data1.length !== this._mainData.length )
+						{
+							this.main_line_updateCompleteHandler(Event as FlexEvent);
+						}
+						myViewStack.selectedIndex = 1 ;
+						break ;
+					case '趋势买卖':
+						this._index = 2
+						change_ma = true;
+						if( this.normData2 == null || ! _normCheckList[2]  )
+						{
+							this.normShowHandler(2);
+						}
+						else if( this._data2.length !== this._mainData.length )
+						{
+							this.main_line_updateCompleteHandler(Event as FlexEvent);
+						}
+						myViewStack.selectedIndex = 2 ;
+						break ;
+					case '至尊数据':
+						this._index = 3
+						change_ma = true;
+						if( this.normData3 == null || ! _normCheckList[3] )
+						{
+							this.normShowHandler(3);
+						}
+						else if( this._data3.length !== this._mainData.length )
+						{
+							this.main_line_updateCompleteHandler(Event as FlexEvent);
+						}
+						myViewStack.selectedIndex = 3 ;
+						break;
+					case '传统指标':
+						this._index = 4
+						change_ma = true;
+						if( this.normData4 == null || ! _normCheckList[4] )
+						{
+							this.normShowHandler( 4 );
+						}
+						else if( this._data4.length !== this._mainData.length )
+						{
+							this.main_line_updateCompleteHandler(Event as FlexEvent);
+						}
+						myViewStack.selectedIndex = 4 ;
+						break;
+					case '更多':
+						this.addElement( intro );
+						return;
+					default :
+						this._index = -1;
+						myViewStack.visible=false;
+						myViewStack.includeInLayout=false;
+						change_ma = true;
+						return;
+				}
+				
+				myViewStack.visible = true ;
+				myViewStack.includeInLayout = true ;
+			}
+			
+			private function fillVol(item:ChartItem, index:Number):IFill{
+				if( item.item.Open - item.item.Close > 0 )
+					return down;
+				else
+					return up;
+			}
+			
+			private function fillfunction(item:ChartItem, index:Number):IFill {//填充Macd图
+				if(  item.item.MACD > 0)
+					return up ;
+				else
+					return greenFill ;
+			}
+			
+			private function myFillFunction(element:ChartItem, index:Number):IFill {
+				var item:ColumnSeriesItem = ColumnSeriesItem(element);
+
+				if ( item.yValue >= 0)
+				{
+					return up ;
+				}
+				else
+				{
+					return greenFill ;
+				}
+			}
+			
+			private function ZLKPFillFunction(element:ChartItem, index:Number):IFill {
+				if(  element.item.ZLKP >= 100 )
+				{
+					return up ;
+				}
+				else
+				{
+					return yellowFill ;
+				}
+			}
+			
+			private function tips_mouseOutHandler(event:MouseEvent):void
+			{
+				tips.removeEventListener(MouseEvent.MOUSE_DOWN, arguments.callee);
+				tips.removeEventListener(MouseEvent.MOUSE_UP, arguments.callee);
+				tips.removeEventListener(MouseEvent.MOUSE_OUT, arguments.callee);
+			}
+			
+			private  function normShowHandler(index:int):void{
+				
+				var byte:ByteArray = new ByteArray();
+				
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				
+				if( this.parentApplication.parameters[_stockCode] )
+				{
+					byte.writeInt( 1705 );
+					
+					switch( index )
+					{
+						case 0:
+							byte.writeUnsignedInt( 66 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 7 );
+							byte.writeInt( 9 );
+							break;
+						case 1:
+							byte.writeUnsignedInt( 66 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 16 );
+							byte.writeInt( 17 );
+							break;
+						case 2:
+							byte.writeUnsignedInt( 66 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 14 );
+							byte.writeInt( 22 );
+							break;
+						case 3:
+							byte.writeUnsignedInt( 70 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 3 );
+							byte.writeInt( 10 );
+							byte.writeInt( 11 );
+							byte.writeInt( 12 );
+							break;
+						case 4:
+							byte.writeUnsignedInt( 70 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 3 );
+							byte.writeInt( 4 );
+							byte.writeInt( 5 );
+							byte.writeInt( 23 );
+							break;
+						default:
+							return;
+					}
+					
+					byte.writeInt( _stockCode );
+					byte.writeInt( 0 );
+					byte.writeInt( this._cycle );
+					
+					byte.writeUTFBytes(this.parentApplication.secret);
+				}
+				else
+				{
+					byte.writeInt( 1708 );
+					
+					switch( index )
+					{
+						case 0:
+							byte.writeUnsignedInt( 24 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 7 );
+							byte.writeInt( 9 );
+							break;
+						case 1:
+							byte.writeUnsignedInt( 24 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 16 );
+							byte.writeInt( 17 );
+							break;
+						case 2:
+							byte.writeUnsignedInt( 24 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 14 );
+							byte.writeInt( 22 );
+							break;
+						case 3:
+							byte.writeUnsignedInt( 28 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 3 );
+							byte.writeInt( 10 );
+							byte.writeInt( 11 );
+							byte.writeInt( 12 );
+							break;
+						case 4:
+							byte.writeUnsignedInt( 28 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 3 );
+							byte.writeInt( 4 );
+							byte.writeInt( 5 );
+							byte.writeInt( 23 );
+							break;
+						default:
+							return;
+					}
+					
+					byte.writeInt( _stockCode );
+					byte.writeInt( 0 );
+					byte.writeInt( this._cycle );
+				}
+
+				
+				(new MySocket).send( byte , normDataHandler );
+			}
+			
+			private function normDataHandler(result:ByteArray):void{
+				//Alert.show("获取指标"+this._index);
+				var code:int = result.readUnsignedInt();
+				var cycle:int = result.readUnsignedInt();
+				var count:int = result.readInt();
+				
+				//跳过时间戳部分
+				result.position += count * 4;
+				var num:int = result.readInt();
+				var norm:Vector.<int> = new Vector.<int>;
+				for( var k:int=0 ; k < num ; ++k )
+				{
+					norm.push(result.readInt());
+				}
+				
+				var i:int;
+
+				for( k = 0 ; k < num ; ++k )
+				{
+					//Alert.show( norm[k] + '' );
+					switch( norm[k] )
+					{
+						case 4:
+							normData4 = [];
+							result.position += 4;
+							var nowCount:int  = result.readInt();
+							var pre:int = 8*nowCount; 
+							var pre2:int = 4*nowCount;
+							var nxt:int = 4*nowCount-4;
+							result.position += pre;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre;
+								normData4[i] = [];
+								this.normData4[i]["K"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["D"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["J"] = result.readFloat();
+							}
+							break;
+						case 5:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre = 8*nowCount; 
+							nxt = 4*nowCount-4;
+							result.position += pre ;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre; 
+								this.normData4[i]["DEA"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["DIFF"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["MACD"] = result.readFloat();
+							}
+							break;
+						case 23:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre = 8*nowCount; 
+							nxt = 4*nowCount-4;
+							result.position += pre ;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre; 
+								this.normData4[i]["RSI1"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["RSI2"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["RSI3"] = result.readFloat();
+							}
+							break;
+						case 7:
+							result.position += 4;
+							nowCount =result.readInt();
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this._big[i]["HHJSJDB"] = result.readFloat();
+							}
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this._big[i]["HHJSJDC"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								this._big[i]["HHJSJDB"]  = NaN;
+								this._big[i]["HHJSJDC"]  = NaN;
+							}
+							this.extrude();
+							break;
+						case 9:
+							normData = [];
+							result.position += 4;
+							nowCount =result.readInt();
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								normData[i] = [];
+								this.normData[i]["ZLZZ"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								normData[i] = [];
+								this.normData[i]["ZLZZ"] = NaN;
+							}
+							break;
+						case 10:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2;
+							normData3 = [];
+							var buy:Number = 0;
+							var sell:Number = 0;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre2;
+								buy = result.readFloat()/10000;
+								result.position += nxt;
+								sell = result.readFloat()/10000;
+								normData3[i] = [];
+								this.normData3[i]["ZLTJ"] = buy - sell;
+							}
+							for( ; i<count ; ++i)
+							{
+								normData3[i] = [];
+								this.normData3[i]["ZLTJ"] = NaN;
+							}
+							break;
+						case 11:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2; 
+							buy = 0;
+							sell = 0;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre2; 
+								buy = result.readFloat()/10000;
+								result.position += nxt;
+								sell = result.readFloat()/10000;
+								this.normData3[i]["GFTJ"] = buy - sell;
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData3[i]["GFTJ"] = NaN;
+							}
+							break;
+						case 12:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2; 
+							buy = 0;
+							sell = 0;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre2; 
+								buy = result.readFloat()/10000;
+								result.position += nxt;
+								sell = result.readFloat()/10000;
+								this.normData3[i]["SHTJ"] = buy - sell;
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData3[i]["SHTJ"] = NaN;
+							}
+							break;
+						
+						case 14:
+							result.position += 4;
+							nowCount  = result.readInt();
+							this.normData2 = [];
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this.normData2[i] = [];
+								this.normData2[i]["ZLKP"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData2[i] = [];
+								this.normData2[i]["ZLKP"] = NaN;
+							}
+							result.position += 4*nowCount;
+							break;
+						
+						case 16:
+							result.position += 4;
+							nowCount  = result.readInt();
+							normData1 = [];
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								normData1[i] = [];
+								this.normData1[i]["JJCC"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								normData1[i] = [];
+								this.normData1[i]["JJCC"] = NaN;
+							}
+							result.position += 4*nowCount;
+							break;
+						case 17:
+							result.position += 4;
+							nowCount  = result.readInt();
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this.normData1[i]["SHSL"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData1[i]["SHSL"] = NaN;
+							}
+							break;
+						
+						/*
+						case 21:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2;
+							this.normData2 = [];
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this.normData2[i] = [];
+								result.position -= pre2;
+								this.normData2[i]["ZQQRX"] = result.readFloat();
+								result.position += nxt;
+								this.normData2[i]["DQQRX"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData2[i] = [];
+								this.normData2[i]["ZQQRX"] = NaN;
+								this.normData2[i]["DQQRX"] = NaN;
+							}
+							break;
+						*/
+						case 22:
+							var var1:Number;
+							var var2:Number;
+							var obj:Object;
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre2;
+								var1 = result.readFloat();
+								this.normData2[i]["first_trend"] = var1 * 1.2;
+								this.normData2[i]["second_trend"] = var1 * 1.1;
+								result.position += nxt;
+								var2 = result.readFloat();
+								this.normData2[i]["third_trend"] = var2 * 0.9;
+								this.normData2[i]["fouth_trend"] = var2 * 0.8;
+								obj =  this._big[i];
+								this.normData2[i]["Open"] = obj["Open"];
+								this.normData2[i]["Close"] = obj["Close"];
+								this.normData2[i]["Low"] = obj["Low"];
+								this.normData2[i]["High"] = obj["High"];
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData2[i]["first_trend"] = NaN;
+								this.normData2[i]["second_trend"] = NaN;
+								this.normData2[i]["third_trend"] = NaN;
+								this.normData2[i]["fouth_trend"] = NaN;
+							}
+							break;
+					}
+				}
+				
+				this.main_line_updateCompleteHandler(Event as FlexEvent);
+				_normCheckList[this._index] = true;
+			}
+			
+			
+			private function main_line_updateCompleteHandler(event:FlexEvent):void
+			{
+					_pageIsLoaded = true;
+					
+					switch( _index )
+					{
+						case 0:
+							_data = new ArrayList( normData.slice( _end ) );
+							break;
+						case 1:
+							_data1 = new ArrayList( normData1.slice( _end ) );
+							break;
+						case 2:
+							_data2 = new ArrayList( normData2.slice( _end ) );
+							break;
+						case 3:
+							_data3 = new ArrayList( normData3.slice( _end ) );
+							break;
+						case 4:
+							_data4 = new ArrayList( normData4.slice( _end ) );
+							break;
+					}
+					
+			}
+
+			
+			/**
+			 * 功能：放大指标
+			 */ 
+			private function toggle(arr:Array):void
+			{
+				for each( var k:Object in arr )
+				{
+					k.visible = k.includeInLayout = ! k.visible;
+				}
+			}
+			
+			private function candlestickchart_mouseDownHandler(event:MouseEvent):void
+			{
+				this.main_line.startX = this.main_line.currX;
+				this.main_line.lineStyle = 'block';
+				candlestickchart.addEventListener( MouseEvent.MOUSE_UP , candlestickchart_mouseUpHandler );
+			}
+			
+			private function candlestickchart_mouseUpHandler(event:MouseEvent):void
+			{
+				this.main_line.lineStyle = 'line';
+				candlestickchart.removeEventListener( MouseEvent.MOUSE_UP , candlestickchart_mouseUpHandler );
+			}
+			
+			
+			private function SSTP_fill (item:ChartItem, index:Number):IFill
+			{
+				var value:Object =  this._data2.getItemAt( index );
+				if( value.second_trend > item.item.High &&  item.item.Low > value.third_trend )
+				{
+					return SSTP_line;
+				}
+				else if( item.item.High < value.first_trend && value.second_trend < item.item.High  )
+				{
+					return yellowFill;
+				}
+				else if( item.item.High >= value.first_trend )
+				{
+					return purple;
+				}
+				else if( item.item.Low < value.third_trend )
+				{
+					return greenFill;
+				}
+				return SSTP_line;
+			}
+			
+			
+			
+			private function update_info():void
+			{
+				var byte:ByteArray = new ByteArray();
+				
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1710 );
+				byte.writeUnsignedInt( 8 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 1 );
+				byte.writeInt( this._stockCode );
+				
+				(new MySocket).send( byte , tranInfoHandler );
+			}
+			
+			private function tranInfoHandler( result:ByteArray ):void{
+				
+				result.position += 8;
+				
+				var temp:Object = new Object;
+				var showCode:String;
+				if ( this._stockCode > 1000000)
+				{
+					showCode = this._stockCode.toString().substr(1);
+				}
+				else if( this._stockCode.toString().length === 1 )
+				{
+					showCode = '00000' + this._stockCode;
+				}
+				else
+				{
+					showCode =this._stockCode.toString();
+				}
+				temp.stockName = showCode  + '  ' + result.readMultiByte( 12 , "cn-gb") ;
+				temp.time = result.readInt();
+				this._lastClosePrice = temp.lastClosePrice = result.readFloat().toFixed(2);
+				temp.todayOpen =  result.readFloat();
+				temp.highest = result.readFloat();
+				temp.lowest = result.readFloat();
+				temp.nowPrice = result.readFloat();
+				temp.vol = result.readFloat();
+				temp.amount = result.readFloat();
+				temp.upDown = temp.nowPrice - temp.lastClosePrice;
+				temp.upDownPercent = temp.upDown*100 / temp.lastClosePrice;
+				
+				var buySum:Number=0;
+				var sellSum:Number=0;
+				
+				result.position += 60;
+				for(var i:int = 1 ; i<6 ; ++i)
+				{
+					result.position -= 60;
+					temp["sell"+i] = result.readFloat();
+					temp["sell"+i] = temp["sell"+i] == 0 ? '——' : temp["sell"+i] ;
+					result.position += 16;
+					sellSum += temp["sellVol"+i] = Math.round(result.readFloat());
+					result.position += 16;
+					temp["buy"+i] = result.readFloat();
+					temp["buy"+i] = temp["buy"+i] == 0 ? '——' : temp["buy"+i] ;
+					result.position += 16;
+					buySum += temp["buyVol"+i] = Math.round(result.readFloat());
+				}
+				result.position += 12;
+				temp.avgVol5 = result.readFloat();
+				result.position += 4;
+				temp.wc = buySum - sellSum ;
+				temp.wb = 100 * temp.wc / (buySum + sellSum);
+				temp.wp = result.readFloat();
+				temp.np = temp.vol - temp.wp;
+				temp.nowVol =  result.readFloat();
+				temp.hs= (temp.vol / this._Outstanding_shares).toFixed(2) + '%';
+				
+				var date:Date = new Date( temp.time * 1000 );
+				var start:Date = new Date(date.fullYear , date.month , date.date , 9 , 30);
+				var diff:int;
+				if( date.hours > 11 )
+					diff = (date.time - start.time - 5400000) / 60000;
+				else
+					diff = (date.time - start.time) / 60000;
+				
+				temp.lb = temp.vol*240 / (temp.avgVol5*diff);
+				
+				_tran_info = new ObjectProxy( temp );
+				
+			}
+			
+			private function getDealData():void{
+				var byte:ByteArray = new ByteArray;
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1707 );
+				byte.writeUnsignedInt( 8 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 1 );
+				byte.writeInt( this._stockCode );
+				byte.writeInt(0);
+				
+				(new MySocket).send( byte , dealDataHandler );
+			}
+			
+			private function dealDataHandler( result:ByteArray ):void
+			{
+				var arr:Array;
+				result.position += 4;
+				var code:int = result.readInt();
+				var count:int =  result.readInt();
+				arr = (Decompress.getInstance()).getFBdata( code , count , result);
+				
+				arr.shift();
+				--count;
+				
+				for(var i:int=0 ; i<count ; ++i)
+				{
+					arr[i]["lastClosePrice"] = this._lastClosePrice;
+				}
+				
+				_maipan = new ArrayList( arr );
+				
+				validateNow();
+				layout.verticalScrollPosition = layout.getVerticalScrollPositionDelta(NavigationUnit.END);
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		
+		<!-- K线图 上涨下跌2种样式 -->
+		<mx:SolidColor id="up" alpha="1" color="red"/>
+		<mx:SolidColor id="down" alpha="1" color="#54FCFC"/>
+		
+		<!-- 水手突破K线 -->
+		<mx:SolidColor id="SSTP_line" alpha=".8" color="#505050"/>
+		
+		<!-- 一些均线 -->
+		<mx:SolidColorStroke id="line_ma5" color="#FFFFFF" weight="0.5"/>
+		<mx:SolidColorStroke id="line_ma10" color="#FFFF00" weight="0.5"/>
+		<mx:SolidColorStroke id="line_ma20" color="#FF00FF" weight="0.5"/>
+		<mx:SolidColorStroke id="line_ma30" color="#00FF00" weight="0.5"/>
+		
+		<mx:DateFormatter id="DD" formatString="YYYY-MM-DD 周EEE"/>
+		<mx:DateFormatter id="DW" formatString="周EEE"/>
+
+		<!-- 指标样式 -->
+		<mx:SolidColorStroke id="s1" color="#FF00FF" weight="2"/>
+		<mx:SolidColorStroke id="s2" color="red" weight="2"/>
+		<mx:SolidColorStroke id="s3" color="#00FF00" weight="2"/>
+		<mx:SolidColorStroke id="red" color="red" weight="0.5"/>
+		<mx:SolidColorStroke id="yellow" color="#FFFF00" weight="2"/>
+		
+		<mx:SolidColor id="yellowFill" color="#FFFF00"/>
+		<mx:SolidColor id="greenFill" color="#00FF00"/>
+		<mx:SolidColor id="purple" color="#FF00FF" />
+		
+		<!-- X Y 坐标提示 -->
+		<s:Label id="xTips" backgroundColor="red" color="white" paddingBottom="4" paddingLeft="4"
+				 paddingRight="4" paddingTop="4" text="---"/>
+		<s:Label id="yTips" x="10" backgroundColor="red" color="white" paddingBottom="4"
+				 paddingLeft="4" paddingRight="4" paddingTop="4" text="---"/>
+		
+		<mx:CategoryAxis id="x_axis" categoryField="id"/>
+		
+		<mx:AxisRenderer id="x_renderer" axis="{x_axis}" showLabels="false" showLine="false"
+						 tickLength="0" tickPlacement="none"/>
+		
+		<!-- K线数据提示 -->
+		<s:BorderContainer id="tips" y="30" width="80" backgroundAlpha="0.7"
+						   backgroundColor="#CCC6C6" borderColor="red"
+						   mouseDown="{event.currentTarget.startDrag()}"
+						   mouseOut="tips_mouseOutHandler(event)"
+						   mouseUp="{event.currentTarget.stopDrag()}"
+						   toolTip="按住鼠标左键可拖动该组件至您认为适合的位置">
+			
+			<s:layout>
+				<s:VerticalLayout/>
+			</s:layout>
+			
+			<s:Label color="white" fontWeight="bold" fontSize="14"	 width="80"  text="时间" paddingLeft="4"/>
+			<s:Label color="yellow"	fontWeight="bold"	 width="80" textAlign="right"   text="{DD.format( new Date(xDate.Date) )}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="开盘" paddingLeft="4"/>
+			<comp:mylabel measureValue="{ _preLastClosePrice.toFixed(2) }"   fontWeight="bold"  width="80" textAlign="right"  text="{xDate.Open.toFixed(2)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold" fontSize="14"	 width="80"  text="最高" paddingLeft="4"/>
+			<comp:mylabel measureValue="{ _preLastClosePrice.toFixed(2) }" 	fontWeight="bold"	 width="80" textAlign="right"   text="{xDate.High.toFixed(2)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="最低" paddingLeft="4"/>
+			<comp:mylabel measureValue="{ _preLastClosePrice.toFixed(2) }"  fontWeight="bold"  width="80" textAlign="right"  text="{xDate.Low.toFixed(2)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold" fontSize="14"	 width="80"  text="收盘" paddingLeft="4"/>
+			<comp:mylabel measureValue="{ _preLastClosePrice.toFixed(2) }" 	fontWeight="bold"	 width="80" textAlign="right"   text="{xDate.Close.toFixed(2)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="成交量" paddingLeft="4"/>
+			<s:Label  color="yellow" fontWeight="bold"  width="80" textAlign="right"  text="{int(xDate.Vol)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="成交额" paddingLeft="4"/>
+			<s:Label  color="yellow" fontWeight="bold"  width="80" textAlign="right"  text="{int(xDate.Amount/10000)}万" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="涨幅" paddingLeft="4"/>
+			<comp:mylabel  fontWeight="bold"  width="80" textAlign="right" text="{(( xDate.Close / _preLastClosePrice - 1 ) * 100).toFixed(2)}%" paddingRight="8"/>
+			
+		</s:BorderContainer>
+		
+		<s:BorderContainer id="intro" width="300" height="201" horizontalCenter="0"
+						   verticalCenter="0">
+			<s:layout>
+				<s:VerticalLayout/>
+			</s:layout>
+			<s:Label color="white" fontSize="16" paddingLeft="5" text="尊敬的客户您好："/>
+			<s:Label color="white" fontSize="13" paddingBottom="5" paddingLeft="36" paddingTop="5"
+					 text="感谢您使用经传辅助决策体验版，如果您想获"/>
+			<s:Label color="#FFFFFF" fontSize="13" paddingBottom="5" paddingTop="5"
+					 text="得更多、更及时的辅助决策功能，请联系："/>
+			<s:Label buttonMode="true"
+					 click="{ navigateToURL(new URLRequest('http://products.jingzhuan.cn/sjad1.html') ) }"
+					 color="#FF0000" fontSize="14" fontWeight="bold" mouseChildren="false"
+					 paddingBottom="5" paddingLeft="36" paddingTop="5" text="当地服务中心（详情可点击查询）"
+					 useHandCursor="true"/>
+			<s:Label color="#FF0000" fontSize="14" fontWeight="bold" paddingBottom="10"
+					 paddingLeft="36" paddingTop="5" text="服务热线：4007003809"/>
+			
+			<s:Button width="300" label="关闭"
+					  click="{
+					  this.removeElement( intro );
+					  myViewStack.visible=false;
+					  myViewStack.includeInLayout=false;
+					  change_ma = true;
+					  this._index = -1;
+					  }"/>
+		</s:BorderContainer>
+		
+		<mx:NumberFormatter id="numberFormatter" precision="2" rounding="up"/>
+		
+	</fx:Declarations>
+	<s:Group width="100%" height="100%" >
+		<s:layout>
+			<s:VerticalLayout/>
+		</s:layout>
+		<s:Group left="0" right="0" top="0" width="100%" height="100%">
+			<s:layout>
+				<s:HorizontalLayout gap="0"/>
+			</s:layout>
+			<s:Group id="left_group" width="100%" height="100%" 
+							   mouseMove="left_group_mouseMoveHandler(event)"
+							   mouseOver="left_group_mouseMoveHandler(event)" textAlign="right">
+				<s:BorderContainer width="100%" height="100%" borderColor="#FF0000">
+					<s:layout>
+						<s:VerticalLayout gap="0" horizontalAlign="right"/>
+					</s:layout>
+					
+					<s:Group width="100%" height="22" >
+						<s:layout>
+							<s:HorizontalLayout gap="10"/>
+						</s:layout>
+						<!-- 提示 -->
+						<s:Label id="cycle" color="white" fontSize="14" paddingLeft="10"
+								 paddingTop="4" text="日线"/>
+						<s:Label visible="{change_ma}" width="50" color="white" fontSize="14"
+								 includeInLayout="{change_ma}" paddingLeft="2" paddingTop="4"
+								 text="{ DW.format( new Date( xDate.Date ) ) } "/>
+						<s:Label visible="{change_ma}" color="#FFFFFF" fontSize="14"
+								 includeInLayout="{change_ma}" paddingRight="2" paddingTop="4"
+								 text="MA5：{xDate.Ma5.toFixed(2)}"/>
+						<s:Label visible="{change_ma}" color="#FFFF00" fontSize="14"
+								 includeInLayout="{change_ma}" paddingRight="2" paddingTop="4"
+								 text="MA10：{xDate.Ma10.toFixed(2)}"/>
+						<s:Label visible="{change_ma}" color="#FF00FF" fontSize="14"
+								 includeInLayout="{change_ma}" paddingRight="2" paddingTop="4"
+								 text="MA20：{xDate.Ma20.toFixed(2)}"/>
+						<s:Label visible="{change_ma}" color="#00FF00" fontSize="14"
+								 includeInLayout="{change_ma}" paddingRight="2" paddingTop="4"
+								 text="MA30：{xDate.Ma30.toFixed(2)}"/>
+						<s:Label visible="{!change_ma}" color="yellow" fontSize="14"
+								 includeInLayout="{!change_ma}" paddingRight="2" paddingTop="4"
+								 text="HHJSJDB：{xDate.HHJSJDB.toFixed(2)}"/>
+						<s:Label visible="{!change_ma}" color="red" fontSize="14"
+								 includeInLayout="{!change_ma}" paddingRight="2" paddingTop="4"
+								 text="HHJSJDC：{xDate.HHJSJDC.toFixed(2)}"/>
+						
+						<s:Spacer width="100%"/>
+						<s:Label text="设置我的专属个股"  click="{ navigateToURL(new URLRequest('http://u.n8n8.cn/') ) }" paddingTop="4" paddingRight="45"
+								 color="#3275D2" fontSize="14"  fontWeight="bold" useHandCursor="true" buttonMode="true"
+								  toolTip="专属个股最多添加5只，专属个股一经添加后一个月内无法更改,不添加的个股只能查看T-2数据"/>
+						
+					</s:Group>
+					
+					<mx:CandlestickChart id="candlestickchart" width="100%" height="80%" mouseDown="candlestickchart_mouseDownHandler(event)"
+										 cacheAsBitmap="true" chromeColor="#040404" color="#FF0000"
+										 dataProvider="{_mainData}" gutterRight="55"
+										 showDataTips="false" textAlign="left">
+						<mx:verticalAxis>
+							<comp:MyLinearAxis id="vaxis" baseAtZero="false" maximumLabelPrecision="2"/>
+						</mx:verticalAxis>
+						
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{vaxis}" minorTickLength="0"
+											 minorTickPlacement="none" placement="right"
+											 tickLength="0" tickPlacement="none">
+								<mx:axisStroke>
+									<mx:SolidColorStroke color="red" weight="1"/>
+								</mx:axisStroke>
+							</mx:AxisRenderer>
+						</mx:verticalAxisRenderers>
+						
+						<mx:horizontalAxis>
+							<mx:CategoryAxis id="haxis" categoryField="id"/>
+						</mx:horizontalAxis>
+						
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{haxis}" placement="top" showLabels="false"
+											 tickLength="0" tickPlacement="none">
+								<mx:axisStroke>
+									<mx:SolidColorStroke color="red" weight="1.5"/>
+								</mx:axisStroke>
+							</mx:AxisRenderer>
+						</mx:horizontalAxisRenderers>
+						<mx:series>
+							<comp:myCandlestickSeries id="main_line" closeField="Close" updateComplete="main_line_updateCompleteHandler(event)"
+													  declineFill="{down}" fill="{up}"
+													  filterData="false" highField="High"
+													  itemRenderer="utils.MyMSeriesRenderer"
+													  lowField="Low" openField="Open"/>
+							<mx:LineSeries visible="{change_ma}" filterData="false"
+										   includeInLayout="false" lineStroke="{line_ma5}"
+										   yField="Ma5"/>
+							<mx:LineSeries visible="{change_ma}" filterData="false" 
+										   includeInLayout="false" lineStroke="{line_ma10}"
+										   yField="Ma10"/>
+							<mx:LineSeries visible="{change_ma}" filterData="false"
+										   includeInLayout="false" lineStroke="{line_ma20}"
+										   yField="Ma20"/>
+							<mx:LineSeries visible="{change_ma}" filterData="false"
+										   includeInLayout="false" lineStroke="{line_ma30}"
+										   yField="Ma30"/>
+							<mx:LineSeries visible="{!change_ma}"
+										   includeInLayout="false" lineStroke="{yellow}"
+										   yField="HHJSJDB"/>
+							<mx:LineSeries visible="{!change_ma}"
+										   includeInLayout="false" lineStroke="{red}"
+										   yField="HHJSJDC"/>
+						</mx:series>
+						<mx:backgroundElements>
+							<comp:GridLinesEx/><!-- 设置为虚线 -->
+							<s:Group>
+								<s:Image alpha=".3" source="@Embed('../../img/logo.jpg')"/>
+							</s:Group>
+							
+						</mx:backgroundElements>
+					</mx:CandlestickChart>
+					<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+					
+					<!-- 成交量 -->
+					<s:Group width="100%" height="12" >
+						<s:layout>
+							<s:HorizontalLayout gap="10" paddingBottom="0" paddingTop="0"/>
+						</s:layout>
+						<s:Label color="white" paddingLeft="10" text="成交量(手)    {xDate.Vol.toFixed(2)}"/>
+						<s:Label color="#FFFFFF" text="5：{xDate.Vol5.toFixed(2)}"/>
+						<s:Label color="#FFFF00" text="10：{xDate.Vol10.toFixed(2)}"/>
+						<s:Label color="#FF00FF" text="20：{xDate.Vol20.toFixed(2)}"/>
+					</s:Group>
+					<mx:ColumnChart width="100%" height="20%" color="#FF0000"
+									dataProvider="{_mainData}" gutterRight="55" paddingLeft="0"
+									paddingRight="0" seriesFilters="[]" showDataTips="false"
+									textAlign="left">
+						
+						<mx:backgroundElements>
+							<mx:GridLines gridDirection="horizontal" horizontalTickAligned="true"
+										  verticalTickAligned="true">
+								<mx:horizontalStroke>
+									<mx:SolidColorStroke alpha="0.3" color="#e9e9e9" weight="1"/>
+								</mx:horizontalStroke>
+							</mx:GridLines>
+						</mx:backgroundElements>
+						
+						<mx:horizontalAxis>
+							<mx:CategoryAxis id="haxis2" categoryField="id"/>
+						</mx:horizontalAxis>
+						
+						<mx:verticalAxis>
+							<comp:MyLinearAxis  id="linear" baseAtZero="true"/>  
+						</mx:verticalAxis>
+						
+						<mx:verticalAxisRenderers>
+							<mx:AxisRenderer axis="{linear}" labelGap="0" minorTickLength="0"
+											 minorTickPlacement="none" placement="right"
+											 tickLength="0" tickPlacement="none">
+								<mx:axisStroke>
+									<mx:SolidColorStroke color="red" weight="1"/>
+								</mx:axisStroke>
+							</mx:AxisRenderer>
+						</mx:verticalAxisRenderers>
+						
+						<mx:horizontalAxisRenderers>
+							<mx:AxisRenderer axis="{haxis2}" showLabels="false" showLine="false">
+								<mx:axisStroke>
+									<mx:SolidColorStroke color="red" weight="1"/>
+								</mx:axisStroke>
+							</mx:AxisRenderer>
+						</mx:horizontalAxisRenderers>
+						<mx:series>
+							<mx:ColumnSeries id="volSeries" fillFunction="fillVol" filterData="false"
+											 yField="Vol"/>
+							<mx:LineSeries filterData="false" includeInLayout="false"
+										   lineStroke="{line_ma5}" yField="Vol5"/>
+							<mx:LineSeries filterData="false" includeInLayout="false"
+										   lineStroke="{line_ma10}" yField="Vol10"/>
+							<mx:LineSeries filterData="false" includeInLayout="false"
+										   lineStroke="{line_ma20}" yField="Vol20"/>
+						</mx:series>
+					</mx:ColumnChart>
+					<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+				
+
+					
+					<mx:ViewStack id="myViewStack" visible="false" width="100%" maxHeight="400" height="40%" borderVisible="false" includeInLayout="false" creationPolicy="all">
+						
+						<!-- **********************************************主力追踪******************************************************* -->
+						<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A" label="主力追踪">
+							<s:layout>
+								<s:VerticalLayout gap="0"/>
+							</s:layout>
+							<!-- 主力追踪 -->
+							<s:Group width="100%" height="12" >
+								<s:layout>
+									<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+								</s:layout>
+								<s:Label color="white" paddingLeft="10" text="主力追踪 "/>
+								<s:Label color="red" paddingLeft="10" text="{normTips.ZLZZ.toFixed(2)}"/>
+							</s:Group>
+						
+							<mx:LineChart right="0" width="100%" height="100%" color="#FF0000"
+										  gutterRight="55" dataProvider="{this._data}"
+										  horizontalAxisRenderers="{[x_renderer]}" paddingTop="0"
+										  seriesFilters="[]" showDataTips="false" textAlign="left">	
+								
+								<mx:backgroundElements>
+									<mx:GridLines gridDirection="horizontal" horizontalTickAligned="true"
+												  verticalTickAligned="true">
+										<mx:horizontalStroke>
+											<mx:SolidColorStroke alpha="0.3" color="#e9e9e9" weight="1"/>
+										</mx:horizontalStroke>
+									</mx:GridLines>
+								</mx:backgroundElements>
+								
+								<mx:verticalAxis>
+									<comp:MyLinearAxis id="ZLZZ_y" baseAtZero="false" />
+								</mx:verticalAxis>
+								
+								<mx:verticalAxisRenderers>  
+									<mx:AxisRenderer axis="{ZLZZ_y}" minorTickLength="0"
+													 minorTickPlacement="none" placement="right"
+													 tickLength="0" tickPlacement="none">
+										<mx:axisStroke>
+											<mx:SolidColorStroke color="red" weight="1"/>
+										</mx:axisStroke>
+									</mx:AxisRenderer>
+								</mx:verticalAxisRenderers>
+								
+								<mx:series>
+									<mx:LineSeries id="ZLZZ" lineStroke="{s2}" yField="ZLZZ"/>
+								</mx:series>
+							</mx:LineChart>
+							<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+						</s:NavigatorContent>
+						
+						<!-- ****************************************************中线**************************************************** -->
+						<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A" label="中线">
+							
+							<s:layout>
+								<s:VerticalLayout gap="0"/>
+							</s:layout>
+							<!-- 基金持仓 -->
+							<s:Group id="JJCCContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([SHSLContain]);}">
+	
+								<s:Group width="100%" height="12" >
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="基金持仓"/>
+									<s:Label color="yellow" paddingLeft="10" text="{normTips.JJCC.toFixed(2)}"/>
+								</s:Group>
+								<mx:ColumnChart right="0" width="100%" height="100%" color="#FF0000"
+												columnWidthRatio=".95" dataProvider="{_data1}"
+												gutterRight="55"
+												horizontalAxisRenderers="{[x_renderer]}"
+												seriesFilters="[]" textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<comp:MyLinearAxis id="JJCC_y" baseAtZero="true"/>  
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>  
+										<mx:AxisRenderer axis="{JJCC_y}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:ColumnSeries id="JJCC" fill="{yellowFill}" yField="JJCC"/>
+									</mx:series>
+								</mx:ColumnChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+								
+							</s:Group>
+							
+							<!-- 散户数量 -->
+							<s:Group id="SHSLContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([JJCCContain]);}">
+
+								<s:Group width="100%" height="12" >
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="散户数量"/>
+									<s:Label color="red" paddingLeft="10" text="{normTips.SHSL.toFixed(2)}"/>
+								</s:Group>
+								<mx:ColumnChart width="100%" height="100%" color="#FF0000"
+												columnWidthRatio=".95" dataProvider="{_data1}"
+												gutterRight="55"
+												horizontalAxisRenderers="{[x_renderer]}" paddingLeft="0"
+												paddingRight="0" seriesFilters="[]" showDataTips="false"
+												textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  horizontalTickAligned="true"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<comp:MyLinearAxis id="SHSL_y" baseAtZero="true"/>  
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>
+										<mx:AxisRenderer axis="{SHSL_y}" labelGap="0" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:ColumnSeries id="SHSL" fill="{greenFill}" yField="SHSL"/>
+									</mx:series>
+								</mx:ColumnChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+								
+							</s:Group>
+							
+						</s:NavigatorContent>
+						
+						<!-- *************************************************趋势*************************************************** -->
+						<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A" label="趋势" >
+							
+							<s:layout>
+								<s:VerticalLayout gap="0"/>
+							</s:layout>
+							
+							<!-- 主力控盘 -->
+							<s:Group id="ZLKPContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle( [SSTPContain] );}">
+								<s:Group width="100%" height="12">
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="主力控盘"/>
+									<s:Label color="yellow" paddingLeft="10" text="{normTips.ZLKP.toFixed(2)}"/>
+								</s:Group>
+								<mx:ColumnChart right="0" width="100%" height="100%" color="#FF0000"
+												dataProvider="{_data2}" gutterRight="55"
+												horizontalAxisRenderers="{[x_renderer]}"
+												seriesFilters="[]" textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  horizontalTickAligned="true"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<comp:MyLinearAxis id="ZLKP_y" baseAtZero="false"/>  
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>  
+										<mx:AxisRenderer axis="{ZLKP_y}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:ColumnSeries fillFunction="ZLKPFillFunction" yField="ZLKP"/>
+										<mx:LineSeries id="ZLKP" lineStroke="{yellow}" yField="ZLKP"/>
+									</mx:series>
+								</mx:ColumnChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+								
+							</s:Group>
+							
+							<!-- 水手突破 -->
+							<s:Group id="SSTPContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle( [ZLKPContain]);}">
+	
+								<s:Group width="100%" height="12" >
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="水手突破"/>
+									<s:Label color="#FF00FF" paddingLeft="10"
+											 text="上趋势：{normTips.first_trend.toFixed(2)}"/>
+									<s:Label color="#FFFF00" paddingLeft="10"
+											 text="次上趋势：{normTips.second_trend.toFixed(2)}"/>
+									<s:Label color="#FFFFFF" paddingLeft="10"
+											 text="次下趋势：{normTips.third_trend.toFixed(2)}"/>
+									<s:Label color="#00FF00" paddingLeft="10"
+											 text="下趋势：{normTips.fouth_trend.toFixed(2)}"/>
+								</s:Group>
+								<mx:CandlestickChart width="100%" height="100%" chromeColor="#040404"
+													 color="#FF0000" dataProvider="{this._data2}"
+													 gutterRight="55" showDataTips="false"
+													 textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<comp:MyLinearAxis id="SSTP_y" baseAtZero="false"/>
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>
+										<mx:AxisRenderer axis="{SSTP_y}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke alpha="0.8" color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:horizontalAxis>
+										<mx:CategoryAxis id="SSTP_x" categoryField="id"/>
+									</mx:horizontalAxis>
+									
+									<mx:horizontalAxisRenderers>
+										<mx:AxisRenderer axis="{SSTP_x}" minorTickLength="0"
+														 minorTickPlacement="none" showLabels="false"
+														 showLine="false" tickLength="0"
+														 tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke alpha="0.8" color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:horizontalAxisRenderers>
+									
+									<mx:series>
+										<mx:CandlestickSeries closeField="Close" fillFunction="SSTP_fill"
+															  declineFill="{SSTP_line}"
+															  fill="{SSTP_line}" highField="High"
+															  itemRenderer="utils.MyMSeriesRenderer_2" lowField="Low" openField="Open"/>
+										<mx:LineSeries  lineStroke="{line_ma10}" id="SSTP" yField="second_trend"/>
+										<mx:LineSeries  lineStroke="{line_ma5}" yField="third_trend"/>
+										<mx:LineSeries  lineStroke="{line_ma20}" yField="first_trend"/>
+										<mx:LineSeries  lineStroke="{line_ma30}" yField="fouth_trend"/>
+									</mx:series>
+								</mx:CandlestickChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+								
+							</s:Group>
+								
+						</s:NavigatorContent>
+						
+						<!-- ***********************************************************主力**************************************************** -->
+						<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A" label="主力">
+							<s:layout>
+								<s:VerticalLayout gap="0"/>
+							</s:layout>
+							<!-- 主力统计 -->
+							<s:Group id="ZLTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([GFTJContain , SHTJContain ]);}">
+
+								<s:Group width="100%" height="12" >
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="主力统计 "/>
+									<s:Label color="red" paddingLeft="10" text="{normTips.ZLTJ.toFixed(2)}"/>
+								</s:Group>
+								<mx:ColumnChart width="100%" height="100%" color="#FF0000"
+											  dataProvider="{_data3}" gutterRight="55"
+											  horizontalAxisRenderers="{[x_renderer]}" textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									
+									<mx:verticalAxis>
+										<mx:LinearAxis id="ZLTJ_y" baseAtZero="false"/>  
+									</mx:verticalAxis>
+									
+									
+									<mx:verticalAxisRenderers>  
+										<mx:AxisRenderer axis="{ZLTJ_y}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:ColumnSeries fillFunction="myFillFunction" id="ZLTJ"  yField="ZLTJ" />
+									</mx:series>
+								</mx:ColumnChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+								
+							</s:Group>
+							
+							<!-- 跟风统计 -->
+							<s:Group id="GFTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([ZLTJContain , SHTJContain ]);}">
+
+								<s:BorderContainer width="100%" height="12" borderVisible="false"
+												   borderWeight="0">
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="跟风统计 "/>
+									<s:Label color="red" paddingLeft="10" text="{normTips.GFTJ.toFixed(2)}"/>
+								</s:BorderContainer>
+								<mx:ColumnChart width="100%" height="100%" color="#FF0000"
+											  dataProvider="{_data3}" gutterRight="55"
+											  horizontalAxisRenderers="{[x_renderer]}" textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<mx:LinearAxis id="GFTJ_y" baseAtZero="false" />  
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>  
+										<mx:AxisRenderer axis="{GFTJ_y}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:ColumnSeries fillFunction="myFillFunction" id="GFTJ"  yField="GFTJ"/>
+									</mx:series>
+								</mx:ColumnChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+									
+							</s:Group>
+							
+							<!-- 散户统计 -->
+							<s:Group id="SHTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([ZLTJContain , GFTJContain ]);}">
+	
+								<s:Group width="100%" height="12" >
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="散户统计 "/>
+									<s:Label color="red" paddingLeft="10" text="{normTips.SHTJ.toFixed(2)}"/>
+								</s:Group>
+								<mx:ColumnChart width="100%" height="100%" color="#FF0000"
+											  dataProvider="{_data3}" gutterRight="55"
+											  horizontalAxisRenderers="{[x_renderer]}" textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<mx:LinearAxis id="SHTJ_y" baseAtZero="false"/>  
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>  
+										<mx:AxisRenderer axis="{SHTJ_y}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:ColumnSeries fillFunction="myFillFunction" id="SHTJ"  yField="SHTJ"/>
+									</mx:series>
+								</mx:ColumnChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+								
+							</s:Group>
+							
+						</s:NavigatorContent>
+						
+						<!-- ****************************************************传统指标**************************************************** -->
+						<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A" >
+							<s:layout>
+								<s:VerticalLayout gap="0"/>
+							</s:layout>
+							<!-- KDJ -->
+							<s:Group id="KDJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([ MACDContain , RSIContain ]);}" >
+	
+								<s:Group width="100%" height="12">
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="KDJ "/>
+									<s:Label color="#FFFFFF" fontSize="14" text="K：{normTips.K.toFixed(3)}"/>
+									<s:Label color="#FFFF00" fontSize="14" text="D：{normTips.D.toFixed(3)}"/>
+									<s:Label color="#FF00FF" fontSize="14" text="J：{normTips.J.toFixed(3)}"/>
+								</s:Group>
+								
+								<mx:LineChart right="0" width="100%" height="100%" color="#FF0000"
+											  gutterRight="55" dataProvider="{this._data4}"
+											  horizontalAxisRenderers="{[x_renderer]}" paddingTop="0"
+											  seriesFilters="[]" showDataTips="false" textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  horizontalTickAligned="true"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<mx:LinearAxis id="kdj_y" baseAtZero="false"/>
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>  
+										<mx:AxisRenderer axis="{kdj_y}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:LineSeries id="KDJ" lineStroke="{line_ma5}" yField="K"/>
+										<mx:LineSeries  lineStroke="{line_ma10}" yField="D"/>
+										<mx:LineSeries  lineStroke="{line_ma20}" yField="J"/>
+									</mx:series>
+								</mx:LineChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+
+							</s:Group>
+							
+							<!-- MACD -->
+							<s:Group id="MACDContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([KDJContain , RSIContain ]);}">
+
+								<s:Group width="100%" height="12">
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="MACD "/>
+									<s:Label color="#FFFF00" fontSize="14" text="DIFF：{normTips.DIFF.toFixed(2)}"/>
+									<s:Label color="#FFFFFF" fontSize="14" text="DEA：{normTips.DEA.toFixed(2)}"/>
+									<s:Label color="green" fontSize="14" text="MACD：{normTips.MACD.toFixed(2)}"/>
+								</s:Group>
+								
+								<mx:ColumnChart right="0" width="100%" height="100%"
+												color="#FF0000" columnWidthRatio=".2"
+												gutterRight="55" dataProvider="{this._data4}"
+												horizontalAxisRenderers="{[x_renderer]}"
+												seriesFilters="[]" textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  horizontalTickAligned="true"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<mx:LinearAxis id="linear3" baseAtZero="false"/>  
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>  
+										<mx:AxisRenderer axis="{linear3}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:ColumnSeries fillFunction="myFillFunction" yField="MACD"/>
+										<mx:LineSeries id="MACD" lineStroke="{line_ma10}" yField="DIFF"/>
+										<mx:LineSeries lineStroke="{line_ma5}" yField="DEA"/>
+									</mx:series>
+								</mx:ColumnChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+								
+							</s:Group>
+							
+							<!-- RSI -->
+							<s:Group id="RSIContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([KDJContain , MACDContain ]);}" >
+
+								<s:Group width="100%" height="12" >
+									<s:layout>
+										<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+									</s:layout>
+									<s:Label color="white" paddingLeft="10" text="RSI "/>
+									<s:Label color="#FFFFFF" fontSize="14" text="RSI1：{normTips.RSI1.toFixed(2)}"/>
+									<s:Label color="#FFFF00" fontSize="14" text="RSI2：{normTips.RSI2.toFixed(2)}"/>
+									<s:Label color="#FF00FF" fontSize="14" text="RSI3：{normTips.RSI3.toFixed(2)}"/>
+								</s:Group>
+								<mx:LineChart right="0" width="100%" height="100%" color="#FF0000"
+											  gutterRight="55" dataProvider="{this._data4}"
+											  horizontalAxisRenderers="{[x_renderer]}" paddingTop="0"
+											  seriesFilters="[]" showDataTips="false" textAlign="left">
+									
+									<mx:backgroundElements>
+										<mx:GridLines gridDirection="horizontal"
+													  horizontalTickAligned="true"
+													  verticalTickAligned="true">
+											<mx:horizontalStroke>
+												<mx:SolidColorStroke alpha="0.3" color="#e9e9e9"
+																	 weight="1"/>
+											</mx:horizontalStroke>
+										</mx:GridLines>
+									</mx:backgroundElements>
+									
+									<mx:verticalAxis>
+										<mx:LinearAxis id="RSI_y" baseAtZero="true"/>
+									</mx:verticalAxis>
+									
+									<mx:verticalAxisRenderers>  
+										<mx:AxisRenderer axis="{RSI_y}" minorTickLength="0"
+														 minorTickPlacement="none" placement="right"
+														 tickLength="0" tickPlacement="none">
+											<mx:axisStroke>
+												<mx:SolidColorStroke color="red" weight="1"/>
+											</mx:axisStroke>
+										</mx:AxisRenderer>
+									</mx:verticalAxisRenderers>
+									
+									<mx:series>
+										<mx:LineSeries id="RSI"  lineStroke="{line_ma5}" yField="RSI1"/>
+										<mx:LineSeries lineStroke="{line_ma10}" yField="RSI2"/>
+										<mx:LineSeries lineStroke="{line_ma20}" yField="RSI3"/>
+									</mx:series>
+								</mx:LineChart>
+								<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+							
+							</s:Group>
+							
+						</s:NavigatorContent>
+						
+					</mx:ViewStack>
+					<s:Spacer height="8" />
+					<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+					<s:Group width="100%" height="22" >
+						<s:layout>
+							<s:HorizontalLayout/>
+						</s:layout>
+<!--
+						<s:ButtonBar x="50" y="0" fontSize="14" useHandCursor="true" buttonMode="true" focusEnabled="false" >
+							<s:layout>
+								<s:ButtonBarHorizontalLayout/>
+							</s:layout>
+							<s:ArrayList>
+								<fx:String>主力追踪</fx:String>
+								<fx:String>中线主力</fx:String>
+								<fx:String>趋势买卖</fx:String>
+								<fx:String>至尊数据</fx:String>
+								<fx:String>传统指标</fx:String>
+								<fx:String>更多</fx:String>
+							</s:ArrayList>
+						</s:ButtonBar>
+-->					
+						<s:ButtonBar fontSize="14" horizontalCenter="0" verticalCenter="0" change="changeHandler(event)" >
+							<s:layout>
+								<s:HorizontalLayout gap="-1" columnWidth="80" variableColumnWidth="false" />
+							</s:layout>
+							<s:dataProvider>
+								<s:ArrayList source="[主力追踪,中线主力,趋势买卖,至尊数据,传统指标,更多]" />
+							</s:dataProvider>
+						</s:ButtonBar>
+						
+						<s:Label width="2" height="100%" backgroundColor="red" color="#FF0000"
+								 fontWeight="bold" text=" "/>
+						<s:Label width="40" buttonMode="true" click="{this._less()}" color="#FF0000"
+								 fontSize="26" fontWeight="bold" paddingRight="10" text="+"
+								 toolTip="放大K线" useHandCursor="true"/>
+						<s:Label width="2" height="100%" backgroundColor="red" color="#FF0000"
+								 fontWeight="bold" paddingLeft="20" text=" "/>
+						<s:Label width="40" buttonMode="true" click="{this._more()}" color="#FF0000"
+								 fontSize="20" fontWeight="bold" paddingRight="10" text="—"
+								 toolTip="缩小K线" useHandCursor="true"/>
+						<s:Label width="2" height="100%" backgroundColor="red" color="#FF0000"
+								 fontWeight="bold" paddingLeft="20" text=" "/>
+						
+					</s:Group>
+				</s:BorderContainer>
+			</s:Group>
+			
+			<s:Spacer width="4" />
+			
+			<s:BorderContainer width="250" height="100%" borderColor="#FF0000">
+				<s:layout>
+					<s:VerticalLayout gap="0"/>
+				</s:layout>
+				
+				<!-- 买卖实时信息 -->
+				<s:Label width="250" color="yellow" fontSize="20" paddingBottom="4"
+						 paddingLeft="50" paddingTop="10" text="{_tran_info.stockName}"/>
+				
+				<s:Label width="250" height="1" backgroundColor="#FF0000" text=" "/>
+				
+				
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label width="30" color="white" fontSize="15" paddingBottom="2" paddingTop="2" textAlign="left"
+							 text="委比"/>
+					<comp:mylabel width="75" fontSize="14" paddingBottom="2" paddingTop="4" textAlign="center"
+								  text="{_tran_info.wb.toFixed(2)}%" measureValue="0"/>
+					<s:Label width="40" color="white" fontSize="15" paddingBottom="2" paddingLeft="10"
+							 paddingTop="2" text="委差" textAlign="right"/>
+					<comp:mylabel width="75" fontSize="14" paddingBottom="2" paddingTop="4" textAlign="center" paddingRight="4"
+								  text="{_tran_info.wc.toFixed(0)}" measureValue="0"/>
+				</s:Group>
+				<s:Label width="250" height="1" backgroundColor="#FF0000" text=" "/>
+				
+				<!-- 卖5盘 -->
+				<s:Group  width="250" height="20">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="50"
+							 paddingTop="2" text="⑤"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2"  textAlign="right"
+								  paddingTop="4" text="{_tran_info.sell5.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.sellVol5.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group  width="250" height="20" >
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="50"
+							 paddingTop="2" text="④"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2"  textAlign="right"
+								  paddingTop="4" text="{_tran_info.sell4.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.sellVol4.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group  width="250" height="20" >
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="50"
+							 paddingTop="2" text="③"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2" textAlign="right"
+								  paddingTop="4" text="{_tran_info.sell3.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.sellVol3.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group  width="250" height="20">
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="50"
+							 paddingTop="2" text="②"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2" textAlign="right"
+								  paddingTop="4" text="{_tran_info.sell2.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.sellVol2.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group  width="250" height="20" >
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="16"
+							 paddingTop="2" text="卖盘 ①"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2" textAlign="right"
+								  paddingTop="4" text="{_tran_info.sell1.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90"  color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.sellVol1.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Label  width="250" height="1" backgroundColor="#FF0000" text=" "/>
+				
+				<!-- 买5盘 -->
+				<s:Group  width="250" height="20" >
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="16"
+							 paddingTop="2" text="买盘 ①"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2"  textAlign="right"
+								  paddingTop="4" text="{_tran_info.buy1.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.buyVol1.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group  width="250" height="20" >
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="50"
+							 paddingTop="2" text="②"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2" textAlign="right"
+								  paddingTop="4" text="{_tran_info.buy2.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.buyVol2.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group  width="250" height="20" >
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="50"
+							 paddingTop="2" text="③"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2"  textAlign="right"
+								  paddingTop="4" text="{_tran_info.buy3.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.buyVol3.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group  width="250" height="20" >
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="50"
+							 paddingTop="2" text="④"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2"  textAlign="right"
+								  paddingTop="4" text="{_tran_info.buy4.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.buyVol4.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group  width="250" height="20" >
+					<s:layout>
+						<s:HorizontalLayout/>
+					</s:layout>
+					<s:Label minWidth="70" color="white" fontSize="15" paddingBottom="2" paddingLeft="50"
+							 paddingTop="2" text="⑤"/>
+					<comp:mylabel width="70" fontSize="14" paddingBottom="2"  textAlign="right"
+								  paddingTop="4" text="{_tran_info.buy5.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}"/>
+					<s:Label width="90" color="yellow" fontSize="15" paddingBottom="2"
+							 paddingRight="0" paddingTop="2" text="{_tran_info.buyVol5.toString()}"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Label width="250" height="1" backgroundColor="#FF0000" text=" "/>
+				
+				
+				<!-- 实时数据 -->
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="现价"/>
+					<comp:mylabel width="80" fontSize="14" paddingBottom="2" paddingRight="4"
+								  paddingTop="4" text="{_tran_info.nowPrice.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}" textAlign="right"/>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="今开"/>
+					<comp:mylabel width="80" fontSize="14" paddingBottom="2" paddingRight="4"
+								  paddingTop="4" text="{_tran_info.todayOpen.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}" textAlign="right"/>
+				</s:Group>
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="涨跌"/>
+					<comp:mylabel width="80" fontSize="14" paddingBottom="2" paddingRight="4"
+								  paddingTop="4" text="{_tran_info.upDown.toFixed(2)}" measureValue="0" textAlign="right"/>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="最高"/>
+					<comp:mylabel width="80" fontSize="14" paddingBottom="2" paddingRight="4"
+								  paddingTop="4" text="{_tran_info.highest.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}" textAlign="right"/>
+				</s:Group>
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="涨幅"/>
+					<comp:mylabel width="80" fontSize="14" paddingBottom="2" paddingRight="4"
+								  paddingTop="4" text="{_tran_info.upDownPercent.toFixed(2)}%" measureValue="0" textAlign="right"/>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="最低"/>
+					<comp:mylabel width="80" fontSize="14" paddingBottom="2" paddingRight="4"
+								  paddingTop="4" text="{_tran_info.lowest.toFixed(2)}" measureValue="{_tran_info.lastClosePrice}" textAlign="right"/>
+				</s:Group>
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="总量"/>
+					<s:Label width="80" color="yellow" fontSize="14" paddingBottom="2" textAlign="right"
+							 paddingTop="4" text="{_tran_info.vol.toFixed(0)}"/>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="量比"/>
+					<comp:mylabel width="80" fontSize="14" paddingBottom="2" paddingRight="4"
+								  paddingTop="4" text="{_tran_info.lb.toFixed(2)}" measureValue="1" textAlign="right"/>
+				</s:Group>
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="外盘"/>
+					<s:Label width="80" color="red" fontSize="14" paddingBottom="2" paddingTop="4" textAlign="right"
+							 text="{_tran_info.wp.toFixed(0)}"/>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="内盘"/>
+					<s:Label width="80" color="#50FF50" fontSize="14" paddingBottom="2"
+							 paddingRight="4" paddingTop="4" text="{_tran_info.np.toFixed(0)}" textAlign="right"/>
+				</s:Group>
+				
+				<s:Label width="250" height="1" backgroundColor="#FF0000" text=" "/>
+				<!-- 财务信息 -->
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="市盈"/>
+					<s:Label id="PE" width="80" color="white" fontSize="14" paddingBottom="2"
+							 paddingTop="4" text="---" textAlign="right"/>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="股本"/>
+					<s:Label id="Share_capital" width="80" color="white" fontSize="14"
+							 paddingBottom="2" paddingRight="4" paddingTop="4" text="---"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="换手"/>
+					<s:Label width="80" color="white" fontSize="14" paddingBottom="2" paddingTop="4"
+							 text="{_tran_info.hs}" textAlign="right"/>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="流通"/>
+					<s:Label id="Outstanding_shares" width="80" color="white" fontSize="14"
+							 paddingBottom="2" paddingRight="4" paddingTop="4" text="---"
+							 textAlign="right"/>
+				</s:Group>
+				<s:Group width="250" height="24" >
+					<s:layout>
+						<s:HorizontalLayout paddingBottom="4" paddingLeft="10" paddingTop="4"/>
+					</s:layout>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="净资"/>
+					<s:Label id="Net_assets" width="80" color="white" fontSize="14"
+							 paddingBottom="2" paddingTop="4" text="---" textAlign="right"/>
+					<s:Label color="white" fontSize="15" paddingBottom="2" paddingTop="2" text="收益"
+							 toolTip="最近报告期的每股收益"/>
+					<s:Label id="income" width="80" color="white" fontSize="14" paddingBottom="2"
+							 paddingRight="4" paddingTop="4" text="---" textAlign="right"/>
+				</s:Group>
+				<s:Label width="250" height="1" backgroundColor="#FF0000" text=" "/>
+				<!-- 交易明细 -->
+				<s:List  width="250" height="100%"	borderVisible="false" contentBackgroundColor="#0A0A0A" dataProvider="{_maipan}" 	itemRenderer="renderer.buy_info_format" />
+			</s:BorderContainer>
+		</s:Group>
+	</s:Group>
+</s:NavigatorContent>

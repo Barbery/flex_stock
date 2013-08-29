@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:CartesianChart xmlns:fx="http://ns.adobe.com/mxml/2009" 
+				   xmlns:s="library://ns.adobe.com/flex/spark" 
+				   xmlns:mx="library://ns.adobe.com/flex/mx" gutterTop="0"
+				   right="0" width="100%" height="100%" color="#FFFFFF"
+				   gutterLeft="50" paddingRight="50" updateComplete="init()"
+				   paddingTop="0" seriesFilters="[]" showDataTips="false">
+	<fx:Script>
+		<![CDATA[
+		/**
+		 * 封装的分时图基件
+		 */
+			private var i:int = 0;
+			private function init():void
+			{
+				//避免重复绘制x坐标轴
+				if( i === 0 )
+				{
+					var item:Object = (getFirstItem("horizontal")).item;
+					
+					var now:Date = new Date( item.Time );
+					var year:Number = now.fullYear;
+					var month:Number = now.month;
+					var day:Number = now.date;
+					
+					var startDate:Date  = new Date( year , month , day , 11 , 30 );
+					var endDate:Date   = new Date( year , month , day , 13, 0 );
+					var minDate:Date   = new Date( year , month , day , 9, 30 );
+					var maxDate:Date   = new Date( year , month , day , 15, 0 );
+					
+					hAxis.maximum = maxDate;
+					hAxis.minimum = minDate;
+					hAxis.disabledRanges = [{rangeStart: startDate , rangeEnd: endDate } ];
+					i++;
+				}
+			}
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		@namespace chart "components.chart.*";
+		.horizontalAxis{
+			tick-placement:none;
+			minor-tick-placement:none;
+			show-line:false;
+			showLabels:false;
+			tickLength:0;
+		}
+		
+		.linedNumericAxis{
+			font-size:11;
+			tick-placement:none;
+			minor-tick-placement:none;
+			show-line:false;
+		}
+	</fx:Style>
+	<mx:backgroundElements>
+		<mx:GridLines gridDirection="horizontal" horizontalTickAligned="true"
+					  verticalTickAligned="true">
+			<mx:horizontalStroke>
+				<mx:SolidColorStroke alpha="0.15" color="red" weight="1"/>
+			</mx:horizontalStroke>
+		</mx:GridLines>
+
+		<s:Group>
+			<s:Rect left="0" right="0" top="0" bottom="0">
+				<s:stroke>
+					<s:SolidColorStroke color="red"/>
+				</s:stroke>
+			</s:Rect>
+		</s:Group>
+	</mx:backgroundElements>
+	
+	<mx:horizontalAxis>
+		<mx:DateTimeAxis id="hAxis" dataUnits="minutes" displayLocalTime="true" interval="30" labelUnits="minutes" />
+	</mx:horizontalAxis>
+
+	<mx:horizontalAxisRenderers>
+		<mx:AxisRenderer axis="{hAxis}" styleName="horizontalAxis"/>
+	</mx:horizontalAxisRenderers>
+	
+	<mx:verticalAxis>
+		<mx:LinearAxis id="vAxis" baseAtZero="false"/>
+	</mx:verticalAxis>
+	
+	<mx:verticalAxisRenderers>
+		<mx:AxisRenderer axis="{vAxis}" placement="left"
+						 styleName="linedNumericAxis"/>
+	</mx:verticalAxisRenderers>
+</mx:CartesianChart>

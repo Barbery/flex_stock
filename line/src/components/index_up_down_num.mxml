@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init()" hide="__distruct()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import mx.utils.ObjectProxy;
+			
+			[Bindable]
+			private var data:ObjectProxy;
+			
+			private var timer:Timer;
+
+			private function __distruct():void
+			{
+				timer.stop();
+				timer.removeEventListener(TimerEvent.TIMER , update);
+			}
+			
+			private function init():void
+			{
+				if( timer != null )
+				{
+					__distruct();
+				}
+				
+				update_info();
+				
+				var updateTime:int = 6000;
+				timer = new Timer(updateTime);
+				timer.addEventListener(TimerEvent.TIMER , update);
+				timer.start();
+			}
+			
+			private function update(event:TimerEvent):void
+			{
+				update_info();
+			}
+			
+			private function update_info():void
+			{
+				var byte:ByteArray = new ByteArray();
+				
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1710 );
+				byte.writeUnsignedInt( 16 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 3 );
+				byte.writeInt( 000001 ); //沪
+				byte.writeInt( 1399001 );//深
+				byte.writeInt( 800953 );//创
+
+				
+				(new MySocket).send( byte , tranInfoHandler );
+			}
+			
+			private function tranInfoHandler( result:ByteArray ):void{
+				
+				var count:int = result.readInt();
+				
+				var temp:Object = new Object;
+				
+				for(var i:int = 1 ; i <= count ; i++)
+				{
+					result.position += 92;
+					
+					temp['up'+i] = result.readFloat();
+					temp['down'+i] = result.readFloat();
+
+					result.position += 80;
+     			}
+
+				data = new ObjectProxy( temp );
+				
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<s:layout>
+		<s:VerticalLayout gap="0" />
+	</s:layout>
+	
+	<s:Group minWidth="250" width="100%" height="20" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="60" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2" paddingLeft="4"
+				 paddingTop="2" text="沪"/>
+		<s:Label minWidth="10" color="white" fontSize="15" fontWeight="bold" paddingBottom="2" textAlign="right"
+				 paddingTop="2" text="涨"/>
+		
+		<s:Label minWidth="60" fontSize="14" paddingBottom="2"  textAlign="right" text="{data.up1}"
+					  paddingTop="4"  color="red" />
+		 
+		<s:Label minWidth="10" color="white" fontSize="15" fontWeight="bold" paddingBottom="2" textAlign="right"
+				 paddingTop="2" text="跌"/>
+		
+		<s:Label  minWidth="60"  fontSize="15" paddingBottom="2"  paddingRight="0" paddingTop="2" text="{data.down1}"	 textAlign="right" color="green"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="60" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2" paddingLeft="4"
+				 paddingTop="2" text="深"/>
+		<s:Label minWidth="10" color="white" fontSize="15" fontWeight="bold" paddingBottom="2" textAlign="right"
+				 paddingTop="2" text="涨"/>
+		
+		<s:Label minWidth="60" fontSize="14" paddingBottom="2"  textAlign="right" text="{data.up2}"
+				 paddingTop="4"  color="red" />
+		
+		<s:Label minWidth="10" color="white" fontSize="15" fontWeight="bold" paddingBottom="2" textAlign="right"
+				 paddingTop="2" text="跌"/>
+		
+		<s:Label  minWidth="60"  fontSize="15" paddingBottom="2"  paddingRight="0" paddingTop="2" text="{data.down2}"	 textAlign="right" color="green"/>
+	</s:Group>
+	
+	<s:Group minWidth="250" width="100%" height="20" >
+		<s:layout>
+			<s:HorizontalLayout/>
+		</s:layout>
+		<s:Label minWidth="60" color="yellow" fontSize="15" fontWeight="bold" paddingBottom="2" paddingLeft="4"
+				 paddingTop="2" text="创"/>
+		<s:Label minWidth="10" color="white" fontSize="15" fontWeight="bold" paddingBottom="2" textAlign="right"
+				 paddingTop="2" text="涨"/>
+		
+		<s:Label minWidth="60" fontSize="14" paddingBottom="2"  textAlign="right" text="{data.up3}"
+				 paddingTop="4"  color="red" />
+		
+		<s:Label minWidth="10" color="white" fontSize="15" fontWeight="bold" paddingBottom="2" textAlign="right"
+				 paddingTop="2" text="跌"/>
+		
+		<s:Label  minWidth="60"  fontSize="15" paddingBottom="2"  paddingRight="0" paddingTop="2" text="{data.down3}"	 textAlign="right" color="green"/>
+	</s:Group>
+	
+</s:Group>

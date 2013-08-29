@@ -1,0 +1,1053 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:NavigatorContent xmlns:fx="http://ns.adobe.com/mxml/2009"
+					xmlns:s="library://ns.adobe.com/flex/spark" xmlns:comp="components.*"
+					xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" show="init()" hide="__distruct()" creationComplete="init()">
+	<fx:Declarations>
+		
+		<mx:SolidColorStroke id="line_ma5" color="#FFFFFF" weight="0.5"/>
+		<mx:SolidColorStroke id="line_ma10" color="#FFFF00" weight="0.5"/>
+		<mx:SolidColorStroke id="line_ma20" color="#FF00FF" weight="0.5"/>
+		
+		<mx:SolidColorStroke id="s1" color="#FF00FF" weight="2"/>
+		<mx:SolidColorStroke id="s2" color="red" weight="2"/>
+		<mx:SolidColorStroke id="s3" color="#00FF00" weight="2"/>
+		
+		<mx:DateFormatter id="DT" formatString="JJ:NN"/>
+		
+		<!-- XY轴样式 -->
+		<mx:SolidColorStroke id="xy" color="red" weight="1"/>
+		
+		<!-- 更多 -->
+		<s:BorderContainer id="intro" width="300" height="201" verticalCenter="0" horizontalCenter="0">
+			<s:layout>
+				<s:VerticalLayout/>
+			</s:layout>
+			<s:Label color="white" fontSize="16" paddingLeft="5" text="尊敬的客户您好："/>
+			<s:Label color="white" fontSize="13" paddingBottom="5" paddingLeft="36"
+					 paddingTop="5" text="感谢您使用经传辅助决策体验版，如果您想获"/>
+			<s:Label color="#FFFFFF" fontSize="13" paddingBottom="5" paddingTop="5"
+					 text="得更多、更及时的辅助决策功能，请联系：" />
+			<s:Label color="#FF0000" fontSize="14" paddingBottom="5" paddingLeft="36"
+					 paddingTop="5" text="当地服务中心（详情可点击查询）" click="{ navigateToURL(new URLRequest('http://products.jingzhuan.cn/sjad1.html') ) }" useHandCursor="true"  buttonMode="true" mouseChildren="false"/>
+			<s:Label  color="#FF0000" fontSize="14" paddingBottom="10"
+					  paddingLeft="36" paddingTop="5" text="服务热线：4007003809"/>
+			<s:Button label="关闭" click="{
+					  this.removeElement( intro );
+					  myViewStack.visible=false;
+					  myViewStack.includeInLayout=false;}" />
+		</s:BorderContainer>
+		
+		<mx:Image id="tips" useHandCursor="true" buttonMode="true"/>
+		<mx:Image id="arrow" source="@Embed('../../img/arrow.png')"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+		/**
+		 * 分时线
+		 */
+			import mx.charts.ChartItem;
+			import mx.collections.ArrayList;
+			import mx.events.FlexEvent;
+			import mx.graphics.IFill;
+			import mx.graphics.SolidColor;
+			import mx.utils.ObjectProxy;
+			
+			[Bindable]
+			private var xDate:Object; //数据提示
+			
+			[Bindable]
+			private var _myData:ArrayList;
+			
+			[Bindable]
+			private var _normData:ArrayList;
+			
+			[Bindable]
+			private var _normTips:Object; //指标数据提示
+			
+			[Bindable]
+			private var startDate:Date;
+			[Bindable]
+			private var endDate:Date;
+			[Bindable]
+			private var minDate:Date;
+			[Bindable]
+			private var maxDate:Date;
+			
+			private var _stockCode:int;
+			private var _Interval:Number = 0.05;
+			private var _timer:Timer;
+			private var _lastTime:int = 0;
+			//检查是否是切换股票了，true为切换股票了
+			private var _isChangeStock:Boolean = false;
+			private var _index:int = -1;
+			private var _normLastTime:Number;
+			
+			private var _lastClosePrice:Number;
+
+
+			public function __distruct():void{
+				_timer.stop();
+				_timer.removeEventListener(TimerEvent.TIMER , arguments.callee );
+				this.removeEventListener(MouseEvent.MOUSE_MOVE , module1_mouseMoveHandler);
+				this.removeEventListener(MouseEvent.MOUSE_OVER , module1_mouseMoveHandler);	
+			}
+			
+			public function init():void{
+
+				if( _timer != null )
+				{
+					_timer.stop();
+					_timer.removeEventListener(TimerEvent.TIMER , arguments.callee );
+				}
+
+				//缩放自适应
+				myViewStack.height = this.height * 0.3 ;
+				//this.addEventListener(ResizeEvent.RESIZE , resize , false , 0 ,true);
+				
+				if( _stockCode !== this.parentApplication.stockCode)
+					this._isChangeStock = true;
+				
+				_stockCode = this.parentApplication.stockCode;
+				
+				var byte:ByteArray = new ByteArray();
+				
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1703 );
+				byte.writeUnsignedInt( 12 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 1 );
+				byte.writeUnsignedInt( this._stockCode );
+				byte.writeInt( 0 );
+
+				(new MySocket).send( byte , fsDataHandler );
+
+				//if( this._index >= 0 )
+					this.getNorm(true);
+				
+				//Timer 不能弱引用，否则空闲时会被系统当垃圾回收
+				_timer = new Timer(6000,0);
+				_timer.addEventListener(TimerEvent.TIMER , function():void{
+					getFSData();
+				});
+				_timer.start();
+				
+				this.setFocus();
+				
+				if( this.parentApplication.index >= 0 )
+				{
+					this.changeHandler(this.parentApplication.index);
+					this.parentApplication.index = -1;
+				}
+				
+				//show_tips();
+			}
+			
+//			import mx.core.UIComponent;
+//			private var tips_step:int = 0;
+//			private var light_area:UIComponent;
+//			private var mask_layer:UIComponent =  new UIComponent();
+//			private function show_tips():void
+//			{
+//				//Alert.show('第'+tips_step + '步')
+//				
+//				switch(tips_step)
+//				{
+//					case 0:
+//						var sp:Sprite = new Sprite();
+//						sp.graphics.clear();
+//						sp.graphics.beginFill(0x000000,0.6);
+//						sp.graphics.drawRect(0,0,this.width,this.height);
+//						sp.graphics.endFill();
+//						
+//						this.mouseEnabled = false;
+//						this.mouseFocusEnabled = false;
+//						//this.mouseChildren = false;
+//						mask_layer.addChild(sp);
+//						this.addElement(mask_layer);
+//						mask_layer.blendMode = BlendMode.LAYER;
+//						
+//						light_area = new UIComponent();
+//						mask_layer.addChild(light_area);
+//					case 1:
+//						play_tips(0 , 0 , 0 , 0 , 200 , 50 , 180 , 0 , 0);
+//						break;
+//					case 2:
+//						play_tips(0 , 0 , 0 , 0 , this.width-500 , this.height/2 , this.width-60 , this.height/2 + 50 , 150);
+//						break;
+//					case 3:
+//						play_tips(0 , 160 , this.width , 26 , 220 , 40 , 200 , 140 , -70);
+//						break;
+//					case 4:
+//						play_tips(0 , this.height-120 , this.width , 26 , 220 , this.height-250 , 200 , this.height-120 , -75);
+//						break;
+//					case 5:
+//						this.parentApplication.changeCycle('日线');
+//				}
+//			}
+//			
+//			private function play_tips(lightX:int , lightY:int , lightW:int , lightH:int , tipsX:int ,  tipsY:int , arrowX:int , arrowY:int ,  arrowR:int):void
+//			{
+//				
+//				tips.load('http://free.n6n6.cn/Public/Free/img/tips.png');
+//				
+//				light_area.y = lightY;//this.height-120;
+//				light_area.doubleClickEnabled = true;
+//				light_area.blendMode = BlendMode.ERASE;
+//				
+//				var g:Graphics = light_area.graphics;
+//				g.beginFill(0xffffff,1);
+//				g.drawRect(0,0,lightW,lightH);
+//				g.endFill();
+//				
+//				tips.x = tipsX;
+//				tips.y = tipsY;
+//				
+//				if( tips_step < 1 )
+//				{
+//					light_area.addEventListener(MouseEvent.CLICK , nextStep);
+//					tips.addEventListener(MouseEvent.CLICK , nextStep);
+//					
+//					
+//					function nextStep():void
+//					{
+//						tips_step++;
+//						show_tips();
+//					}
+//					
+//				}
+//				
+//				this.addElement(tips);
+//				
+//				arrow.x = arrowX;
+//				arrow.y = arrowY;
+//				arrow.rotation = arrowR;
+//				
+//				this.addElement(arrow);
+//
+//			}
+			
+			private function getFSData():void{
+				var byte:ByteArray = new ByteArray();
+				
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1024 );
+				byte.writeUnsignedInt( 12 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 1 );
+				byte.writeUnsignedInt( this._stockCode );
+				byte.writeInt( this._lastTime );
+								
+				if( this._lastTime > 0  )
+				{
+					(new MySocket).send( byte , fsSocketHandler );
+				}
+				else
+				{
+					(new MySocket).send( byte , fsDataHandler );
+				}
+			}
+			
+			private function fsDataHandler( result:ByteArray ):void{
+				
+				result.position += 4;
+				var code:int = result.readUnsignedInt();
+				var count:int = result.readInt();
+				this._lastClosePrice = result.readFloat();
+				this.parentApplication.lastClosePrice = _lastClosePrice;
+				var arr:Array = (Decompress.getInstance()).getFSline( code , count , result) ;
+				
+				_myData = new ArrayList(arr);
+				
+				//取倒数第二个时间
+				if( count > 1 )
+					this._lastTime = arr[count-2]['Time'] / 1000 ;
+				else
+					this._lastTime = 0 ;
+				
+				var now:Date = new Date( arr[0]['Time'] );
+				var year:Number = now.fullYear;
+				var month:Number = now.month;
+				var day:Number = now.date;
+				
+				this.startDate = new Date( year , month , day , 11 , 30 );
+				this.endDate = new Date( year , month , day , 13, 0 );
+				this.minDate = new Date( year , month , day , 9, 30 );
+				this.maxDate = new Date( year , month , day , 15, 0 );
+				
+				this._Interval = Math.round(Math.max( Math.abs( arr[0]['max'] - _lastClosePrice ) , Math.abs( _lastClosePrice - arr[0]['min'] ) )*100)/100;
+				this._Interval = this._Interval < 0.05 ? 0.05 : this._Interval*1.01 ;
+				main_y.maximum = (_lastClosePrice + this._Interval );
+				main_y.minimum = (_lastClosePrice - this._Interval );
+				main_y.interval = this._Interval /5;
+				
+				var max_percent:Number = (this._Interval / _lastClosePrice)*100;
+				main_y2.maximum = max_percent;
+				main_y2.minimum = -max_percent;
+				main_y2.interval = max_percent/5;
+				
+			}
+			
+			private function fsSocketHandler( result:ByteArray ):void{
+				
+				result.position += 4;
+				var code:int = result.readUnsignedInt();
+				var count:int = result.readInt();
+
+				if( count < 2)
+					return;
+				var arr:Array = (Decompress.getInstance()).getFSline( code , count , result);
+				var len:uint = _myData.length-1;
+				
+				var getTime:Date = new Date( arr[1]['Time'] );
+				var obj:Object = _myData.getItemAt(len);
+				var sendTime:Date = new Date( obj['Time'] );
+				
+				var i:int;
+				
+				//修正平均价
+				for( i=1 ; i<count ; ++i )
+				{
+					arr[i]['AvgPrice'] = (obj['AvgPrice']*(len+i-1) +arr[i]['Price'])/(len+i);
+				}
+				
+				if( getTime.minutes === sendTime.minutes && getTime.hours === sendTime.hours )
+				{
+					_myData.setItemAt( arr[1] , len );
+					for( i = 2 ; i<count ; ++i )
+					{
+						_myData.addItem( arr[i] );
+					}
+				}
+				else
+				{
+					for( i = 1 ; i<count ; ++i )
+					{
+						_myData.addItem( arr[i] );
+					}
+				}
+				
+				this._lastTime = arr[count-2]['Time'] / 1000 ;
+				
+				var max:Number = Math.round(Math.max( Math.abs( arr[0]['max'] - _lastClosePrice ) , Math.abs( _lastClosePrice - arr[0]['min'] ) )*100)/100;
+				
+				//坐标值没发生变化则避免重绘
+				if( this._Interval < max  )
+				{
+					this._Interval = max;
+					
+					main_y.maximum = (_lastClosePrice + max );
+					main_y.minimum = (_lastClosePrice - max );
+					main_y.interval = max /5;
+					
+					var max_percent:Number = (max / _lastClosePrice)*100;
+					main_y2.maximum = max_percent;
+					main_y2.minimum = -max_percent;
+					main_y2.interval = max_percent/5;
+				}
+				
+				if(this._index >= 0 )
+				{
+					this.getNorm();
+				}
+				
+			}
+			
+//			private  function resize( event:ResizeEvent ):void{
+//				myViewStack.height = this.height * 0.3 ;
+//			}
+			
+			private function module1_mouseMoveHandler(event:MouseEvent):void
+			{
+				this.main_line.findDataPoints(mouseX - 48 , mouseY-1 , 3);
+				
+				var index:int = main_line.currIndex;
+				xDate = _myData.getItemAt(index);
+				_normTips = this._normData.getItemAt(index);
+			}
+			
+			
+			private function moneyformat(val:Object, previousValue:Object, axis:LinearAxis):String {//量图Y轴格式化
+				var str:String = val.toString();
+				var value:int = val.valueOf();
+				if( Math.abs(value) > 100000000 )
+					str = (int(str)/100000000) + '亿';
+				else if( Math.abs(value) > 10000 )
+					str = (int(str)/10000) + '万';
+				
+				return str;
+			}
+			
+			private function moneyformat2(val:Object, previousValue:Object, axis:LinearAxis):String {//至尊数据格式化
+				var value:Number = val.valueOf();
+				return Math.abs(value) > 10000 ? (value/10000) + '亿' : val.toString() + '万' ;
+			}
+
+			private var _last_button:Object=null;
+			private function changeHandler(index:int):void
+			{
+				
+				
+//				if( this._normData == null || this._isChangeStock )
+//				{
+//					this.getNorm(true);
+//					this._isChangeStock = false;
+//				}
+				myViewStack.visible = true ;
+				myViewStack.includeInLayout = true ;
+				
+				if( _last_button !== null )
+				{
+					_last_button.styleName="button";
+				}
+				
+				if(index > 4)
+				{
+					this.addElement( intro );
+					return;
+				}
+				
+				var targetButton:Button = Button(buttonBar.getChildAt(index));
+				if(index === _index)
+				{
+					_index = -1;
+					myViewStack.visible=false;
+					myViewStack.includeInLayout=false;
+					targetButton.styleName="button";
+					_last_button = null;
+					return;
+				}
+				
+				targetButton.styleName="button_down";
+				_last_button = targetButton;
+				_index = myViewStack.selectedIndex = index;
+			}
+			
+			
+			private  function getNorm(all:Boolean = false):void{
+				
+				var byte:ByteArray = new ByteArray();
+				
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1704 );
+				
+				if(  this.parentApplication.parameters[this._stockCode] )
+				{
+					byte.writeUnsignedInt( 40 );
+					byte.writeInt( 0 );
+					byte.writeUnsignedInt( 0 );
+					
+					byte.writeInt( 7 );
+					
+					byte.writeInt( 2 );
+					byte.writeInt( 3 );
+					byte.writeInt( 4 );
+					byte.writeInt( 5 );
+					byte.writeInt( 6 );
+					byte.writeInt( 7 );
+					byte.writeInt( 9 );
+					
+					byte.writeInt( _stockCode );
+					
+				}
+				else
+				{
+					byte.writeUnsignedInt( 28 );
+					byte.writeInt( 0 );
+					byte.writeUnsignedInt( 0 );
+					
+					byte.writeInt( 4 );
+					
+					byte.writeInt( 5 );
+					byte.writeInt( 6 );
+					byte.writeInt( 7 );
+					byte.writeInt( 9 );
+					
+					byte.writeInt( _stockCode );
+					
+				}
+				
+				if( all )
+				{
+					byte.writeInt( 0 );
+					(new MySocket).send( byte , normDataHandler );
+				}
+				else
+				{
+					byte.writeInt( this._normLastTime );
+					(new MySocket).send( byte , normSocketHandler );
+				}
+				
+				
+			}
+			
+			private function normDataHandler(result:ByteArray):void{
+				var count:uint = result.readUnsignedInt();
+				var temp:Array = [];
+				
+				if( this.parentApplication.parameters[this._stockCode] )
+				{
+					for(var i:int = 0 ; i < count ; ++i )
+					{
+						temp.push({
+							'Time' : result.readInt()*1000,
+							'ZLTJ' : result.readFloat()/10000,
+							'GFTJ' : result.readFloat()/10000,
+							'SHTJ' : result.readFloat()/10000,
+							'DEA' : result.readFloat(),
+							'DIFF' : result.readFloat(),
+							'MACD' : result.readFloat(),
+							'RSI1' : result.readFloat(),
+							'RSI2' : result.readFloat(),
+							'RSI3' : result.readFloat(),
+							'K' : result.readFloat(),
+							'D' : result.readFloat(),
+							'J' : result.readFloat(),
+							'LB' : result.readFloat()
+						});
+					}
+				}
+				else
+				{
+					for(i = 0 ; i < count ; ++i )
+					{
+						temp.push({
+							'Time' : result.readInt()*1000,
+							'ZLTJ' : NaN,
+							'GFTJ' : NaN,
+							'SHTJ' : NaN,
+							'DEA' : result.readFloat(),
+							'DIFF' : result.readFloat(),
+							'MACD' : result.readFloat(),
+							'RSI1' : result.readFloat(),
+							'RSI2' : result.readFloat(),
+							'RSI3' : result.readFloat(),
+							'K' : result.readFloat(),
+							'D' : result.readFloat(),
+							'J' : result.readFloat(),
+							'LB' : result.readFloat()
+						});
+					}
+				}
+
+				this._normLastTime = temp[count-1]['Time'] / 1000 ;
+				
+				this._normData = new ArrayList(temp);
+				
+			}
+			
+			private function normSocketHandler( result:ByteArray ):void{
+				
+				var count:uint = result.readUnsignedInt();
+
+				if( count < 2 )
+					return;
+				var temp:Array = [];
+				
+				
+				if( this.parentApplication.parameters[this._stockCode] )
+				{
+					for(var i:int = 0 ; i < count ; ++i )
+					{
+						temp.push({
+							'Time' : result.readInt()*1000,
+							'ZLTJ' : result.readFloat()/10000,
+							'GFTJ' : result.readFloat()/10000,
+							'SHTJ' : result.readFloat()/10000,
+							'DEA' : result.readFloat(),
+							'DIFF' : result.readFloat(),
+							'MACD' : result.readFloat(),
+							'RSI1' : result.readFloat(),
+							'RSI2' : result.readFloat(),
+							'RSI3' : result.readFloat(),
+							'K' : result.readFloat(),
+							'D' : result.readFloat(),
+							'J' : result.readFloat(),
+							'LB' : result.readFloat()
+						});
+					}
+				}
+				else
+				{
+					for(i = 0 ; i < count ; ++i )
+					{
+						temp.push({
+							'Time' : result.readInt()*1000,
+							'ZLTJ' : NaN,
+							'GFTJ' : NaN,
+							'SHTJ' : NaN,
+							'DEA' : result.readFloat(),
+							'DIFF' : result.readFloat(),
+							'MACD' : result.readFloat(),
+							'RSI1' : result.readFloat(),
+							'RSI2' : result.readFloat(),
+							'RSI3' : result.readFloat(),
+							'K' : result.readFloat(),
+							'D' : result.readFloat(),
+							'J' : result.readFloat(),
+							'LB' : result.readFloat()
+						});
+					}
+				}
+
+				this._normLastTime = temp[count-1]['Time'] / 1000 ;
+				for( i = 1 ; i < count ; ++i )
+				{
+					this._normData.addItem( temp[i] );
+				}
+				
+			}
+			
+			//填充Macd图
+			private function fillfunction(item:ChartItem, index:Number):IFill {
+				if(  item.item.MACD > 0)
+					return(new SolidColor(0xff0000, 1));
+				else
+					return(new SolidColor(0x008000, 1));
+			}
+			
+			private function toggle(arr:Array):void
+			{
+				for each( var k:Object in arr )
+				{
+					k.visible = k.includeInLayout = ! k.visible;
+				}
+			}
+			
+			private function check_ZZSJ(event:FlexEvent):void
+			{
+
+				if( this.parentApplication.parameters.username == null || this.parentApplication.parameters.username.length < 1 )
+				{
+					ZLTJ_tips.text = GFTJ_tips.text = SHTJ_tips.text = '尊敬的用户，您还没有登录，无法查看【至尊数据】，请登陆后刷新重试！';
+				}
+				else if( this.parentApplication.parameters[this._stockCode] !== true )
+				{
+					ZLTJ_tips.text = GFTJ_tips.text = SHTJ_tips.text = '您还没设置该股为您的专属个股, 无法查看【至尊数据】，请设置后刷新重试';
+				}
+				else
+				{
+					ZLTJ_tips.text = GFTJ_tips.text = SHTJ_tips.text = '';
+				}
+
+			}
+			
+			private function main_line_drawLinedHandler(event:Event):void
+			{
+				var currX:Number = this.main_line.currX;
+				
+				var obj:Array=getScreenCharts();
+
+				for each( var k:Object in obj )
+				{
+					k.drawLine(currX , mouseY-2);
+				}
+			}
+			
+			private function getScreenCharts():Array
+			{
+				var obj:Array=[];
+				switch( this._index )
+				{
+					case 0:
+						obj = [KDJ];
+						break;
+					case 1:
+						obj=[MACD];
+						break;
+					case 2:
+						obj=[RSI];
+						break;
+					case 3:
+						obj=[LB];
+						break;
+					case 4:
+						obj=[ZLTJ , GFTJ , SHTJ];
+						break;
+				}
+				obj.push(volSeries);
+				
+				return obj;
+			}
+			
+			private function main_line_clearLineHandler(event:Event):void
+			{
+				var obj:Array=getScreenCharts();
+				
+				for each( var k:Object in obj )
+				{
+					k.graphics.clear();
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		.up{color:red;}
+		.down{color:#50FF50}
+		.eq{color:#FFFFFF}
+		.button_down{
+			chromeColor:#0A0A0A;
+			color:white;
+		}
+		.button{
+			chromeColor:#0A0A0A;
+			color:red;
+		}
+	</fx:Style>
+	<s:Group left="0" right="0" top="0" width="100%" height="100%" >
+		<s:layout>
+			<s:HorizontalLayout gap="0"/>
+		</s:layout>
+		<s:BorderContainer width="100%" height="100%" borderColor="#FF0000"
+						   mouseMove="module1_mouseMoveHandler(event)"
+						   mouseOver="module1_mouseMoveHandler(event)">
+			<s:layout>
+				<s:VerticalLayout gap="0"/>
+			</s:layout>
+			<s:Group width="100%" height="22" >
+				<s:layout>
+					<s:HorizontalLayout/>
+				</s:layout>
+				<s:Label width="500" color="white" paddingLeft="50" paddingTop="4"
+						 text=" 时间： { DT.format( new Date(xDate.Time + 60000 ) ) }           价格：  {xDate.Price.toFixed(2)}           均价： { xDate.AvgPrice.toFixed(2) }" />
+				
+			</s:Group>
+			<mx:CartesianChart left="0" right="0" width="100%" height="80%" color="#FFFEFE" gutterLeft="50" gutterRight="50"
+						   paddingTop="0" dataProvider="{_myData}" seriesFilters="[]" doubleClickEnabled="true" doubleClick="{main_line.showCusor();}"
+						  showDataTips="false" >
+				<mx:backgroundElements>
+					<mx:GridLines gridDirection="both" horizontalTickAligned="true"
+								  verticalTickAligned="true">
+						<mx:verticalStroke>
+							<mx:SolidColorStroke alpha=".3" color="red" weight=".5"/>
+						</mx:verticalStroke>
+						<mx:horizontalStroke>
+							<mx:SolidColorStroke alpha="0.8" color="red" weight="1"/>
+						</mx:horizontalStroke>
+					</mx:GridLines>
+					<mx:HRule y="0" width="2" shadowColor="0xff0000" strokeColor="0xff0000"/>
+				</mx:backgroundElements>
+				
+				<mx:horizontalAxis>
+					<mx:DateTimeAxis id="main_x" dataUnits="minutes" displayLocalTime="true"
+									 disabledRanges="{[{rangeStart: this.startDate , rangeEnd: this.endDate } ]}"
+									 interval="30" labelUnits="minutes"
+									 maximum="{ this.maxDate }"
+									 minimum="{this.minDate}"
+									 />
+				</mx:horizontalAxis>
+				
+				<mx:verticalAxis>
+					<mx:LinearAxis id="main_y" alignLabelsToInterval="false" baseAtZero="false" maximumLabelPrecision="2" />
+				</mx:verticalAxis>
+				
+				<mx:verticalAxisRenderers>
+					<mx:AxisRenderer axis="{main_y}" highlightElements="false"  placement="left" tickLength="0" tickPlacement="none" minorTickLength="0" minorTickPlacement="none">
+						<mx:labelRenderer>
+							<fx:Component>
+								<mx:HBox>
+									<fx:Style>
+										@namespace s "library://ns.adobe.com/flex/spark";
+										@namespace mx "library://ns.adobe.com/flex/mx";
+										.up{color:red;}
+										.down{color:#50FF50}
+										.eq{color:#FFFFFF}
+									</fx:Style>
+									<fx:Script>
+										<![CDATA[
+											import mx.utils.ObjectProxy;
+											
+											[Bindable]
+											private var text:ObjectProxy = new ObjectProxy();
+											override public function set data(value:Object):void{
+												text.lastClosePrice = this.parentApplication.lastClosePrice;
+												text.text = Number(value.text).toFixed(2);
+											}
+										]]>
+									</fx:Script>
+									<comp:mylabel text="{text.text}" measureValue="{text.lastClosePrice.toFixed(2)}"/>
+								</mx:HBox>
+							</fx:Component>
+						</mx:labelRenderer>
+						<mx:axisStroke>
+							<mx:SolidColorStroke color="red" weight="1"/>
+						</mx:axisStroke>
+					</mx:AxisRenderer>
+					<!-- 副坐标 显示涨跌百分比 -->
+					<mx:AxisRenderer axis="{main_y2}" placement="right" tickLength="0" tickPlacement="none" minorTickLength="0" minorTickPlacement="none" >
+						<mx:labelRenderer>
+							<fx:Component>
+								<mx:HBox>
+									<fx:Script>
+										<![CDATA[
+											
+											override public function set data(value:Object):void{
+												super.data = value;
+											}
+										]]>
+									</fx:Script>
+									<comp:mylabel text="{data.text}%"/>
+								</mx:HBox>
+							</fx:Component>
+						</mx:labelRenderer>
+						<mx:axisStroke>
+							<mx:SolidColorStroke color="red" weight="1"/>
+						</mx:axisStroke>
+					</mx:AxisRenderer>
+				</mx:verticalAxisRenderers>
+				
+				<mx:horizontalAxisRenderers>
+					<mx:AxisRenderer axis="{main_x}" tickLength="0" tickPlacement="none" minorTickLength="0" minorTickPlacement="none">
+						<mx:axisStroke>
+							<mx:SolidColorStroke color="red" weight="1"/>
+						</mx:axisStroke>
+					</mx:AxisRenderer>
+				</mx:horizontalAxisRenderers>
+				
+				<mx:series>
+					<comp:myLinechart id="main_line" xField="Time" yField="Price" drawLined="main_line_drawLinedHandler(event)" clearLine="main_line_clearLineHandler(event)" />
+					
+					<mx:LineSeries displayName="平均" xField="Time" yField="AvgPrice" interactive="false">
+						<mx:lineStroke>
+							<mx:SolidColorStroke color="yellow" weight="1"/>
+						</mx:lineStroke>
+					</mx:LineSeries>
+					
+					<!-- 副坐标 显示涨跌百分比 -->
+					<mx:LineSeries visible="false" interactive="false">
+						<mx:verticalAxis>
+							<mx:LinearAxis id="main_y2" alignLabelsToInterval="false" baseAtZero="false" maximumLabelPrecision="2" />
+						</mx:verticalAxis>
+					</mx:LineSeries>
+					
+				</mx:series>	
+			</mx:CartesianChart>
+			<!-- 成交量 -->
+			<s:Group width="100%" height="12" >
+				<s:layout>
+					<s:HorizontalLayout/>
+				</s:layout>
+				<mx:Label id="vol" color="white" paddingLeft="50" text="成交量: {xDate.Vol}"/>
+			</s:Group>
+			
+			<s:Spacer height="2" />
+			
+			<comp:FSChart height="20%" dataProvider="{_myData}"  >
+				<comp:series>
+					<comp:myColumnSeries id="volSeries" displayName="成交量" xField="Time" yField="Vol"/>
+				</comp:series>
+			</comp:FSChart>
+			
+			
+			<mx:ViewStack id="myViewStack" visible="false" width="100%" height="380" borderVisible="false" includeInLayout="false" creationPolicy="auto" >
+				
+				<!-- KDJ -->
+				<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A">
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					<s:Group width="100%" >
+						<s:layout>
+							<s:HorizontalLayout gap="10"/>
+						</s:layout>
+						<s:Label color="#FFFFFF" fontSize="14" paddingLeft="80" text="KDJ"/>
+						<s:Label color="#FFFFFF" fontSize="14" text="K：{_normTips.K.toFixed(2)}"/>
+						<s:Label color="#FFFF00" fontSize="14" text="D：{_normTips.D.toFixed(2)}"/>
+						<s:Label color="#FF00FF" fontSize="14" text="J：{_normTips.J.toFixed(2)}"/>
+					</s:Group>
+					
+					<comp:FSChart  dataProvider="{this._normData}"  >
+						<comp:series>
+							<comp:myLineSeries id="KDJ" form="curve" lineStroke="{line_ma5}" xField="Time"
+										   yField="K"/>
+							<mx:LineSeries form="curve" lineStroke="{line_ma10}" xField="Time"
+										   yField="D"/>
+							<mx:LineSeries form="curve" lineStroke="{line_ma20}" xField="Time"
+										   yField="J"/>
+						</comp:series>
+					</comp:FSChart>
+				</s:NavigatorContent>
+				
+				<!-- MACD -->
+				<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A">
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					<s:Group width="100%" height="12" >
+						<s:layout>
+							<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+						</s:layout>
+						<s:Label color="white" paddingLeft="80" text="MACD "/>
+						<s:Label color="#FFFF00" fontSize="14" text="DIFF：{_normTips.DIFF.toFixed(3)}"/>
+						<s:Label color="#FFFFFF" fontSize="14" text="DEA：{_normTips.DEA.toFixed(3)}"/>
+						<s:Label color="green" fontSize="14" text="MACD：{_normTips.MACD.toFixed(3)}"/>
+					</s:Group>
+					
+					<comp:FSChart  dataProvider="{this._normData}"  >
+						<comp:series>
+							<mx:ColumnSeries fillFunction="fillfunction" xField="Time" yField="MACD"/>
+							<comp:myLineSeries id="MACD" form="curve" lineStroke="{line_ma10}" xField="Time" yField="DIFF"/>
+							<mx:LineSeries form="curve" lineStroke="{line_ma5}" xField="Time" yField="DEA"/>
+						</comp:series>
+					</comp:FSChart>
+
+				</s:NavigatorContent>
+				
+				<!-- RSI -->
+				<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A">
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					
+					<s:Group width="100%" height="12" >
+						<s:layout>
+							<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+						</s:layout>
+						<s:Label color="white" paddingLeft="80" text="RSI "/>
+						<s:Label color="#FFFFFF" fontSize="14" text="RSI1：{_normTips.RSI1.toFixed(2)}"/>
+						<s:Label color="#FFFF00" fontSize="14" text="RSI2：{_normTips.RSI2.toFixed(2)}"/>
+						<s:Label color="#FF00FF" fontSize="14" text="RSI3：{_normTips.RSI3.toFixed(2)}"/>
+					</s:Group>
+					
+					<comp:FSChart  dataProvider="{this._normData}"  >
+						<comp:series>
+							<comp:myLineSeries id="RSI" form="curve" lineStroke="{line_ma5}" xField="Time"   yField="RSI1"/>
+							<mx:LineSeries form="curve" lineStroke="{line_ma10}" xField="Time"   yField="RSI2"/>
+							<mx:LineSeries form="curve" lineStroke="{line_ma20}" xField="Time"   yField="RSI3"/>
+						</comp:series>
+					</comp:FSChart>
+
+				</s:NavigatorContent>
+				
+				<!-- 量比 -->
+				<s:NavigatorContent width="100%" height="100%" backgroundColor="#0A0A0A">
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					
+					<s:Group width="100%" height="12" >
+						<s:layout>
+							<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+						</s:layout>
+						<s:Label color="white" paddingLeft="80" text="量比 "/>
+						<s:Label color="#FFFFFF" fontSize="14" text="{_normTips.LB.toFixed(2)}"/>
+					</s:Group>
+					
+					<comp:FSChart  dataProvider="{this._normData}"  >
+						<comp:series>
+							<comp:myLineSeries id="LB" form="curve" xField="Time" yField="LB" lineStroke="{line_ma5}"/>
+						</comp:series>
+					</comp:FSChart>
+
+				</s:NavigatorContent>
+				
+				<!-- 至尊数据 -->
+				<s:NavigatorContent width="100%" height="100%" 	backgroundColor="#0A0A0A" >
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					<!-- 主力统计 -->
+					<s:Group id="ZLTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([GFTJContain , SHTJContain ]);}">
+						<s:layout>
+							<s:VerticalLayout gap="0"/>
+						</s:layout>
+						<s:Group width="100%" >
+							<s:layout>
+								<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+							</s:layout>
+							<s:Label paddingLeft="80" color="white"  text="主力统计 "/>
+							<s:Label color="red" paddingLeft="10" text="{ _normTips.ZLTJ.toFixed(2)} 万"/>
+							<s:Label id="ZLTJ_tips" color="#555555" paddingLeft="50" text="" fontSize="14" alpha="0.5"/>
+							
+						</s:Group>
+						
+						<comp:FSChart  dataProvider="{this._normData}" updateComplete="check_ZZSJ(event)" >
+							<comp:series>
+								<comp:myLineSeries id="ZLTJ" lineStroke="{s2}"  xField="Time"   yField="ZLTJ"/>
+							</comp:series>
+						</comp:FSChart>
+
+					</s:Group>
+					<s:Label backgroundColor="red" text="---------------------------------------------------------" height="1" width="100%" />
+					
+					<!-- 跟风统计 -->
+					<s:Group id="GFTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([ZLTJContain , SHTJContain ]);}">
+						<s:layout>
+							<s:VerticalLayout gap="0"/>
+						</s:layout>
+						<s:Group width="100%" >
+							<s:layout>
+								<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+							</s:layout>
+							<s:Label paddingLeft="80" color="white"  text="跟风统计 "/>
+							<s:Label color="red" paddingLeft="10" text="{ _normTips.GFTJ.toFixed(2)} 万"/>
+							<s:Label id="GFTJ_tips" color="#555555" paddingLeft="50" text="" fontSize="14" alpha="0.5"/>
+						</s:Group>
+						
+						<comp:FSChart  dataProvider="{this._normData}" >
+							<comp:series>
+								<comp:myLineSeries id="GFTJ" lineStroke="{s1}"  xField="Time"  yField="GFTJ"/>
+							</comp:series>
+						</comp:FSChart>
+						
+					</s:Group>
+					<s:Label backgroundColor="red" text="---------------------------------------------------------" height="1" width="100%" />
+					
+					<!-- 散户统计 -->
+					<s:Group id="SHTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([GFTJContain , ZLTJContain ]);}">
+						<s:layout>
+							<s:VerticalLayout gap="0"/>
+						</s:layout>
+						<s:Group width="100%" >
+							<s:layout>
+								<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+							</s:layout>
+							<s:Label paddingLeft="80" color="white" text="散户统计 "/>
+							<s:Label color="red" paddingLeft="10" text="{ _normTips.SHTJ.toFixed(2)} 万"/>
+							<s:Label id="SHTJ_tips" color="#555555" paddingLeft="50" text="" fontSize="14" alpha="0.5"/>
+						</s:Group>
+						
+						<comp:FSChart  dataProvider="{this._normData}" >
+							<comp:series>
+								<comp:myLineSeries id="SHTJ" lineStroke="{s3}" xField="Time"  yField="SHTJ"/>
+							</comp:series>
+						</comp:FSChart>
+
+					</s:Group>
+					
+				</s:NavigatorContent>
+				
+			</mx:ViewStack>
+			
+			<s:Spacer height="4" />
+			<s:Label backgroundColor="red" text="---------------------------------------------------------" height="1" width="100%" />
+
+			<s:Group  width="100%"  chromeColor="#0A0A0A" color="red" fontSize="14" fontWeight="bold" id="buttonBar" >
+				
+				<s:layout>
+					<s:HorizontalLayout gap="0" columnWidth="100" variableColumnWidth="false" />
+				</s:layout>
+				<s:Button label="KDJ" click="changeHandler(0)" />
+				<s:Button label="MACD" click="changeHandler(1)"/>
+				<s:Button label="RSI" click="changeHandler(2)"/>
+				<s:Button label="量比" click="changeHandler(3)" />
+				<s:Button label="至尊数据" click="changeHandler(4)" />
+				<s:Button label="更多" click="changeHandler(5)" />
+				
+			</s:Group>
+
+		</s:BorderContainer>
+	</s:Group>
+</s:NavigatorContent>

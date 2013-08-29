@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:NavigatorContent xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns:comp="components.*"
+		 xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="250" height="100%">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			[Bindable]
+			private var _stockCode:int;
+			import flash.filters.DropShadowFilter;
+
+			private function init():void
+			{
+				_stockCode = this.parentApplication.stockCode;
+//				
+//				var sp:Sprite = new Sprite();
+//				sp.graphics.clear();
+//				sp.graphics.beginFill(0x000000,0.6);
+//				sp.graphics.drawRect(0,0,this.width,this.height);
+//				sp.graphics.endFill();
+//				
+//				this.mouseEnabled = false;
+//				this.mouseFocusEnabled = false;
+//				this.mouseChildren = false;
+//
+//				this.mask = sp;
+			}
+		]]>
+	</fx:Script>
+	<s:layout>
+		<s:VerticalLayout gap="0" />
+	</s:layout>
+
+	<comp:buy_sell maxHeight="384" code="{_stockCode}" />
+	<s:Label backgroundColor="red" width="250" height="1" text=" " />
+	
+	<comp:financial_data height="70" code="{_stockCode}" />
+	<s:Label backgroundColor="red" width="250" height="1" text=" " />
+	
+	<s:Spacer height="2" />
+	<comp:tran_list code="{_stockCode}" />
+</s:NavigatorContent>

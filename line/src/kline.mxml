@@ -1,0 +1,1468 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" xmlns:comp="components.*" creationComplete="init()"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%">
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		
+		.up{color:red;}
+		.down{color:#50FF50}
+		.eq{color:#FFCC00}
+
+	</fx:Style>
+	<fx:Script>
+		<![CDATA[
+			import mx.charts.ChartItem;
+			import mx.charts.series.items.ColumnSeriesItem;
+			import mx.collections.ArrayList;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.graphics.IFill;
+			import components.MySocket;
+			import components.Decompress;
+			
+			import spark.core.SpriteVisualElement;
+			import spark.events.IndexChangeEvent;
+			
+			private var _stockCode:int;
+			private var _staObj:Stage;
+			private var _big:Array;
+			private var _page:Number=1;
+			private var _cycle:int;
+			private var _end:int;
+			private var _start:int;
+			private var _index:int=-1;
+			private var _lastTime:int = 0;
+			private var _normCheckList:Vector.<Boolean>;
+			
+			private var _Outstanding_shares:Number;
+			private var _length:uint;
+			private var normData:Array;
+			private var normData1:Array;
+			private var normData2:Array;
+			private var normData3:Array;
+			private var normData4:Array;
+			
+			
+			[Bindable]
+			private var xDate:Object; //数据提示
+			
+			[Bindable]
+			private var normTips:Object;
+			
+			[Bindable]//主图数据集
+			private var _mainData:ArrayList;
+			
+			[Bindable]//传统指标数据
+			private var _data4:ArrayList;
+			
+			[Bindable] //短线
+			private var _data:ArrayList;
+			
+			[Bindable] //中线
+			private var _data1:ArrayList;
+			
+			[Bindable] //趋势
+			private var _data2:ArrayList;
+			
+			[Bindable] //至尊数据
+			private var _data3:ArrayList;
+			
+			[Bindable]
+			private var change_ma:Boolean = true;//切换 均线 《=》智能辅助指标
+			
+			[Bindable]
+			private var _preLastClosePrice:Number;
+			
+			public function __distruct():void
+			{
+				left_group.removeEventListener(MouseEvent.MOUSE_MOVE , left_group_mouseMoveHandler); 
+				left_group.removeEventListener(MouseEvent.MOUSE_OVER , left_group_mouseMoveHandler);
+				
+				//_myData.removeAll();
+			}
+			
+			private function cycleFormat( val:int ):void
+			{
+				switch( val )
+				{
+					case 11:
+						cycle.text = '日线' ;
+						break;
+					case 5:
+						cycle.text  = '5分钟';
+						break;
+					case 7:
+						cycle.text  = '15分钟';
+						break;
+					case 9:
+						cycle.text  = '30分钟';
+						break;
+					case 10:
+						cycle.text  = '60分钟';
+						break;
+					case 12:
+						cycle.text  = '周线';
+						break;
+					case 13:
+						cycle.text  = '月线';
+						break;
+				}
+			}
+			
+			public function init():void{
+				//_staObj = this.systemManager.stage;
+				
+				this.addElement(tips);
+
+				//同一个股票 不加载K线数据
+//				if( _stockCode === this.parentApplication.stockCode && _cycle === this.parentApplication.cycle )
+//				{
+//					return;
+//				}
+				
+				_stockCode = 600036;
+				//_stockCode=this.parentApplication.stockCode;
+				//_cycle = this.parentApplication.cycle;
+				_cycle = 11;
+				
+				var byte:ByteArray = new ByteArray();
+				byte.endian = Endian.LITTLE_ENDIAN;
+				
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				byte.writeInt( 1712 );
+				byte.writeUnsignedInt( 16 );
+				byte.writeInt( 0 );
+				byte.writeUnsignedInt( 0 );
+				
+				byte.writeUnsignedInt( 1 );
+				byte.writeInt( _cycle );
+				byte.writeInt( _stockCode );
+				byte.writeInt( 0 );
+				
+				(new MySocket).send( byte , socketDataHandler );
+				
+				
+				
+				this.cycleFormat( _cycle );
+				this.setFocus();
+				
+				_normCheckList = new Vector.<Boolean>(5);
+				
+			}
+
+			private function socketDataHandler( result:ByteArray ):void {
+				
+				var xx:uint = result.readUnsignedInt();
+				var code:int = result.readInt();
+				var cycle:int = result.readInt();
+				var count:int = result.readInt();
+				
+				_big = [];
+				_big  =  (Decompress.getInstance()).getKline( cycle , code , count , result );
+				
+				
+				this._lastTime = _big[count-1]['Date'] / 1000 ;
+				
+				
+				this.normShowHandler( this._index );
+				
+				extrude();
+				
+			}
+			
+			private function extrude(onlyUpdateMainLine:Boolean = false):void{
+				
+				//控制最小
+				if(_page <= 0.2 ){
+					_page = 0.2;
+					return;
+				}
+				var count:int = _big.length;
+				_end = count - (Math.pow(_page , 1.2 )*120) ;
+				if( _end < 0 )
+				{
+					_end = 0;
+					_page >1 ? _page-- : null ;
+				}
+				//控制最大
+				if( _end ===0  && _mainData != null &&  _mainData.length === count ){
+					return;
+				}
+				
+				_mainData = new ArrayList(_big.slice( _end ));
+				
+				if( ! onlyUpdateMainLine )
+				{
+					extrudeNormData();
+				}
+			}
+			
+			public function _more():void{
+				_page++;	
+				extrude();
+			}
+			
+			public function _less():void{
+				
+				if(_page >= 2)
+					_page--;
+				else
+					_page -= 0.2;
+				
+				extrude();
+			}
+			
+			
+			//mouse move
+			private function left_group_mouseMoveHandler(event:MouseEvent):void	
+			{
+				
+				this.main_line.findDataPoints(mouseX-2 , mouseY-2 , 5);
+				var index:int = this.main_line.currIndex;
+				xDate = _mainData.getItemAt(index);
+				_preLastClosePrice = index >0 ? _mainData.getItemAt(index-1)['Close'] : xDate.Close;
+				
+				switch( this._index )
+				{
+					case 0:
+						normTips = this._data[index];
+						break;
+					case 1:
+						normTips = this._data1[index];
+						break;
+					case 2:
+						normTips = this._data2[index];
+						break;
+					case 3:
+						normTips = this._data3[index];
+						break;
+					case 4:
+						normTips = this._data4[index];
+						break;
+				}
+			}
+			
+			private var _last_button:Object=null;
+			private function changeHandler(event:MouseEvent , index:int):void
+			{
+				
+				if( _last_button !== null )
+				{
+					_last_button.styleName="button";
+				}
+				
+				if( index === _index )
+				{
+					this._index = -1;
+					myViewStack.visible=false;
+					myViewStack.includeInLayout=false;
+					change_ma = true;
+					_last_button = null;
+					return;
+				}
+				
+				switch(index)
+				{
+					case 0:
+						this._index = 0;
+						change_ma = false;
+						if( this.normData == null || ! _normCheckList[0] )
+						{
+							this.normShowHandler(0);
+						}
+						else if( this._data.length !== this._mainData.length )
+						{
+							extrudeNormData();
+						}
+						myViewStack.selectedIndex = 0;
+						break ;
+					case 1:
+						this._index = 1;
+						change_ma = true;
+						if( this.normData1 == null || ! _normCheckList[1]  )
+						{
+							this.normShowHandler(1);
+						}
+						else if( this._data1.length !== this._mainData.length )
+						{
+							extrudeNormData();
+						}
+						myViewStack.selectedIndex = 1 ;
+						break ;
+					case 2:
+						this._index = 2
+						change_ma = true;
+						if( this.normData2 == null || ! _normCheckList[2]  )
+						{
+							this.normShowHandler(2);
+						}
+						else if( this._data2.length !== this._mainData.length )
+						{
+							extrudeNormData();
+						}
+						myViewStack.selectedIndex = 2 ;
+						break ;
+					case 3:
+						this._index = 3
+						change_ma = true;
+						if( this.normData3 == null || ! _normCheckList[3] )
+						{
+							this.normShowHandler(3);
+						}
+						else if( this._data3.length !== this._mainData.length )
+						{
+							extrudeNormData();
+						}
+						myViewStack.selectedIndex = 3 ;
+						break;
+					case 4:
+						this._index = 4
+						change_ma = true;
+						if( this.normData4 == null || ! _normCheckList[4] )
+						{
+							this.normShowHandler( 4 );
+						}
+						else if( this._data4.length !== this._mainData.length )
+						{
+							extrudeNormData();
+						}
+						myViewStack.selectedIndex = 4 ;
+						break;
+					case 5:
+						this.addElement( intro );
+						return;
+					default :
+						this._index = -1;
+						myViewStack.visible=false;
+						myViewStack.includeInLayout=false;
+						change_ma = true;
+						_last_button = null;
+						return;
+				}
+				
+				
+				
+				event.target.styleName="button_down";
+				_last_button = event.target;
+				
+				myViewStack.visible = true ;
+				myViewStack.includeInLayout = true ;
+			}
+			
+			private function fillVol(item:ChartItem, index:Number):IFill{
+				if( item.item.Open - item.item.Close > 0 )
+					return down;
+				else
+					return up;
+			}
+			
+			private function fillfunction(item:ChartItem, index:Number):IFill {//填充Macd图
+				if(  item.item.MACD > 0)
+					return up ;
+				else
+					return greenFill ;
+			}
+			
+			private function myFillFunction(element:ChartItem, index:Number):IFill {
+				var item:ColumnSeriesItem = ColumnSeriesItem(element);
+				
+				if ( item.yValue >= 0)
+				{
+					return up ;
+				}
+				else
+				{
+					return greenFill ;
+				}
+			}
+			
+			private function ZLKPFillFunction(element:ChartItem, index:Number):IFill {
+				if(  element.item.ZLKP >= 100 )
+				{
+					return up ;
+				}
+				else
+				{
+					return yellowFill ;
+				}
+			}
+			
+			private  function normShowHandler(index:int):void{
+				
+				var byte:ByteArray = new ByteArray();
+				
+				byte.endian = Endian.LITTLE_ENDIAN;
+				byte.writeUnsignedInt( 100 );
+				byte.writeUnsignedInt( 1396982613 );
+				
+				//if( this.parentApplication.parameters[_stockCode] )
+				if( false )
+				{
+					byte.writeInt( 1705 );
+					
+					switch( index )
+					{
+						case 0:
+							byte.writeUnsignedInt( 66 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 7 );
+							byte.writeInt( 9 );
+							break;
+						case 1:
+							byte.writeUnsignedInt( 66 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 16 );
+							byte.writeInt( 17 );
+							break;
+						case 2:
+							byte.writeUnsignedInt( 66 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 14 );
+							byte.writeInt( 22 );
+							break;
+						case 3:
+							byte.writeUnsignedInt( 70 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 3 );
+							byte.writeInt( 10 );
+							byte.writeInt( 11 );
+							byte.writeInt( 12 );
+							break;
+						case 4:
+							byte.writeUnsignedInt( 70 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 3 );
+							byte.writeInt( 4 );
+							byte.writeInt( 5 );
+							byte.writeInt( 23 );
+							break;
+						default:
+							return;
+					}
+					
+					byte.writeInt( _stockCode );
+					byte.writeInt( 0 );
+					byte.writeInt( this._cycle );
+					
+					byte.writeUTFBytes(this.parentApplication.secret);
+				}
+				else
+				{
+					byte.writeInt( 1708 );
+					
+					switch( index )
+					{
+						case 0:
+							byte.writeUnsignedInt( 24 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 7 );
+							byte.writeInt( 9 );
+							break;
+						case 1:
+							byte.writeUnsignedInt( 24 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 16 );
+							byte.writeInt( 17 );
+							break;
+						case 2:
+							byte.writeUnsignedInt( 24 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 2 );
+							byte.writeInt( 14 );
+							byte.writeInt( 22 );
+							break;
+						case 3:
+							byte.writeUnsignedInt( 28 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 3 );
+							byte.writeInt( 10 );
+							byte.writeInt( 11 );
+							byte.writeInt( 12 );
+							break;
+						case 4:
+							byte.writeUnsignedInt( 28 );
+							byte.writeInt( 0 );
+							byte.writeUnsignedInt( 0 );
+							
+							byte.writeUnsignedInt( 3 );
+							byte.writeInt( 4 );
+							byte.writeInt( 5 );
+							byte.writeInt( 23 );
+							break;
+						default:
+							return;
+					}
+					
+					byte.writeInt( _stockCode );
+					byte.writeInt( 0 );
+					byte.writeInt( this._cycle );
+				}
+				
+				
+				(new MySocket).send( byte , normDataHandler );
+			}
+			
+			private function normDataHandler(result:ByteArray):void{
+				//Alert.show("获取指标"+this._index);
+				var code:int = result.readUnsignedInt();
+				var cycle:int = result.readUnsignedInt();
+				var count:int = result.readInt();
+				
+				//跳过时间戳部分
+				result.position += count * 4;
+				var num:int = result.readInt();
+				var norm:Vector.<int> = new Vector.<int>;
+				for( var k:int=0 ; k < num ; ++k )
+				{
+					norm.push(result.readInt());
+				}
+				
+				var i:int;
+				
+				for( k = 0 ; k < num ; ++k )
+				{
+					//Alert.show( norm[k] + '' );
+					switch( norm[k] )
+					{
+						case 4:
+							normData4 = [];
+							result.position += 4;
+							var nowCount:int  = result.readInt();
+							var pre:int = 8*nowCount; 
+							var pre2:int = 4*nowCount;
+							var nxt:int = 4*nowCount-4;
+							result.position += pre;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre;
+								normData4[i] = [];
+								this.normData4[i]["K"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["D"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["J"] = result.readFloat();
+							}
+							break;
+						case 5:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre = 8*nowCount; 
+							nxt = 4*nowCount-4;
+							result.position += pre ;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre; 
+								this.normData4[i]["DEA"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["DIFF"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["MACD"] = result.readFloat();
+							}
+							break;
+						case 23:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre = 8*nowCount; 
+							nxt = 4*nowCount-4;
+							result.position += pre ;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre; 
+								this.normData4[i]["RSI1"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["RSI2"] = result.readFloat();
+								result.position += nxt;
+								this.normData4[i]["RSI3"] = result.readFloat();
+							}
+							break;
+						case 7:
+							result.position += 4;
+							nowCount =result.readInt();
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this._big[i]["HHJSJDB"] = result.readFloat();
+							}
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this._big[i]["HHJSJDC"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								this._big[i]["HHJSJDB"]  = NaN;
+								this._big[i]["HHJSJDC"]  = NaN;
+							}
+							this.extrude(true);
+							break;
+						case 9:
+							normData = [];
+							result.position += 4;
+							nowCount =result.readInt();
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								normData[i] = [];
+								this.normData[i]["ZLZZ"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								normData[i] = [];
+								this.normData[i]["ZLZZ"] = NaN;
+							}
+							break;
+						case 10:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2;
+							normData3 = [];
+							var buy:Number = 0;
+							var sell:Number = 0;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre2;
+								buy = result.readFloat()/10000;
+								result.position += nxt;
+								sell = result.readFloat()/10000;
+								normData3[i] = [];
+								this.normData3[i]["ZLTJ"] = buy - sell;
+							}
+							for( ; i<count ; ++i)
+							{
+								normData3[i] = [];
+								this.normData3[i]["ZLTJ"] = NaN;
+							}
+							break;
+						case 11:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2; 
+							buy = 0;
+							sell = 0;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre2; 
+								buy = result.readFloat()/10000;
+								result.position += nxt;
+								sell = result.readFloat()/10000;
+								this.normData3[i]["GFTJ"] = buy - sell;
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData3[i]["GFTJ"] = NaN;
+							}
+							break;
+						case 12:
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2; 
+							buy = 0;
+							sell = 0;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre2; 
+								buy = result.readFloat()/10000;
+								result.position += nxt;
+								sell = result.readFloat()/10000;
+								this.normData3[i]["SHTJ"] = buy - sell;
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData3[i]["SHTJ"] = NaN;
+							}
+							break;
+						
+						case 14:
+							result.position += 4;
+							nowCount  = result.readInt();
+							this.normData2 = [];
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this.normData2[i] = [];
+								this.normData2[i]["ZLKP"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData2[i] = [];
+								this.normData2[i]["ZLKP"] = NaN;
+							}
+							result.position += 4*nowCount;
+							break;
+						
+						case 16:
+							result.position += 4;
+							nowCount  = result.readInt();
+							normData1 = [];
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								normData1[i] = [];
+								this.normData1[i]["JJCC"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								normData1[i] = [];
+								this.normData1[i]["JJCC"] = NaN;
+							}
+							result.position += 4*nowCount;
+							break;
+						case 17:
+							result.position += 4;
+							nowCount  = result.readInt();
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								this.normData1[i]["SHSL"] = result.readFloat();
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData1[i]["SHSL"] = NaN;
+							}
+							break;
+						
+						/*
+						case 21:
+						result.position += 4;
+						nowCount  = result.readInt();
+						pre2 = 4*nowCount;
+						nxt = 4*nowCount-4;
+						result.position += pre2;
+						this.normData2 = [];
+						for( i=0 ; i < nowCount ; ++i)
+						{
+						this.normData2[i] = [];
+						result.position -= pre2;
+						this.normData2[i]["ZQQRX"] = result.readFloat();
+						result.position += nxt;
+						this.normData2[i]["DQQRX"] = result.readFloat();
+						}
+						for( ; i<count ; ++i)
+						{
+						this.normData2[i] = [];
+						this.normData2[i]["ZQQRX"] = NaN;
+						this.normData2[i]["DQQRX"] = NaN;
+						}
+						break;
+						*/
+						case 22:
+							var var1:Number;
+							var var2:Number;
+							var obj:Object;
+							result.position += 4;
+							nowCount  = result.readInt();
+							pre2 = 4*nowCount;
+							nxt = 4*nowCount-4;
+							result.position += pre2;
+							for( i=0 ; i < nowCount ; ++i)
+							{
+								result.position -= pre2;
+								var1 = result.readFloat();
+								this.normData2[i]["first_trend"] = var1 * 1.2;
+								this.normData2[i]["second_trend"] = var1 * 1.1;
+								result.position += nxt;
+								var2 = result.readFloat();
+								this.normData2[i]["third_trend"] = var2 * 0.9;
+								this.normData2[i]["fouth_trend"] = var2 * 0.8;
+								obj =  this._big[i];
+								this.normData2[i]["Open"] = obj["Open"];
+								this.normData2[i]["Close"] = obj["Close"];
+								this.normData2[i]["Low"] = obj["Low"];
+								this.normData2[i]["High"] = obj["High"];
+							}
+							for( ; i<count ; ++i)
+							{
+								this.normData2[i]["first_trend"] = NaN;
+								this.normData2[i]["second_trend"] = NaN;
+								this.normData2[i]["third_trend"] = NaN;
+								this.normData2[i]["fouth_trend"] = NaN;
+							}
+							break;
+					}
+				}
+				
+				extrudeNormData();
+				_normCheckList[this._index] = true;
+			}
+			
+			
+			/**
+			 * 功能：放大指标
+			 */ 
+			private function toggle(arr:Array):void
+			{
+				for each( var k:Object in arr )
+				{
+					k.visible = k.includeInLayout = ! k.visible;
+				}
+			}
+			
+			private function candlestickchart_mouseDownHandler(event:MouseEvent):void
+			{
+				this.main_line.startX = this.main_line.currX;
+				this.main_line.lineStyle = 'block';
+				candlestickchart.addEventListener( MouseEvent.MOUSE_UP , candlestickchart_mouseUpHandler );
+				candlestickchart.setFocus();
+			}
+			
+			private function candlestickchart_mouseUpHandler(event:MouseEvent):void
+			{
+				this.main_line.lineStyle = 'line';
+				candlestickchart.removeEventListener( MouseEvent.MOUSE_UP , candlestickchart_mouseUpHandler );
+			}
+			
+			
+			private function SSTP_fill (item:ChartItem, index:Number):IFill
+			{
+				var value:Object =  this._data2[index];
+				if( value.second_trend > item.item.High &&  item.item.Low > value.third_trend )
+				{
+					return SSTP_line;
+				}
+				else if( item.item.High < value.first_trend && value.second_trend < item.item.High  )
+				{
+					return yellowFill;
+				}
+				else if( item.item.High >= value.first_trend )
+				{
+					return purple;
+				}
+				else if( item.item.Low < value.third_trend )
+				{
+					return greenFill;
+				}
+				return SSTP_line;
+			}
+			
+			private function extrudeNormData():void
+			{
+				switch( _index )
+				{
+					case 0:
+						_data = new ArrayList(normData.slice( _end ));
+						break;
+					case 1:
+						_data1 = new ArrayList(normData1.slice( _end ));
+						break;
+					case 2:
+						_data2 = new ArrayList(normData2.slice( _end ));
+						break;
+					case 3:
+						_data3 = new ArrayList(normData3.slice( _end ));
+						break;
+					case 4:
+						_data4 = new ArrayList(normData4.slice( _end ));
+						break;
+				}
+				
+			}
+			
+			private function main_line_drawLinedHandler(event:Event):void
+			{
+				var currX:Number = this.main_line.currX;
+				var obj:Array =  getScreenChart();
+				for each( var k:Object in obj )
+				{
+					k.drawLine(currX , mouseY-2);
+				}
+			}
+			
+			private function getScreenChart():Array
+			{
+				var obj:Array=[];
+				switch( this._index )
+				{
+					case 0:
+						obj = [ZLZZ];
+						break;
+					case 1:
+						obj=[JJCC , SHSL ];
+						break;
+					case 2:
+						obj=[ZLKP , SSTP ];
+						break;
+					case 3:
+						obj=[ZLTJ , GFTJ , SHTJ];
+						break;
+					case 4:
+						obj=[KDJ , MACD , RSI];
+						break;
+				}
+				obj.push(volSeries);
+				return obj;
+			}
+			
+			private function main_line_clearLineHandler(event:Event):void
+			{
+				var obj:Array =  getScreenChart();
+				for each( var k:Object in obj )
+				{
+					k.graphics.clear();
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		
+		<!-- K线图 上涨下跌2种样式 -->
+		<mx:SolidColor id="up" alpha="1" color="red"/>
+		<!--<mx:SolidColor id="down" alpha="1" color="#54FCFC"/> -->
+		<mx:SolidColor id="down" alpha="1" color="green"/>
+		
+		<!-- 水手突破K线 -->
+		<mx:SolidColor id="SSTP_line" alpha=".8" color="#505050"/>
+		
+		<!-- 一些均线 -->
+		<mx:SolidColorStroke id="line_ma5" color="#575757" weight="0.5"/>
+		<mx:SolidColorStroke id="line_ma10" color="#46CBE1" weight="0.5"/>
+		<mx:SolidColorStroke id="line_ma20" color="#FF00FF" weight="0.5"/>
+		<mx:SolidColorStroke id="line_ma30" color="#00FF00" weight="0.5"/>
+		
+		<mx:DateFormatter id="DD" formatString="YYYY-MM-DD 周EEE"/>
+		<mx:DateFormatter id="DW" formatString="周EEE"/>
+		
+		<!-- 指标样式 -->
+		<mx:SolidColorStroke id="s2" color="red" weight="2"/>
+		<mx:SolidColorStroke id="red" color="red" weight="0.5"/>
+		<mx:SolidColorStroke id="e9" color="#e9e9e9" weight="0.5"/>
+		<mx:SolidColorStroke id="yellow" color="#FFFF00" weight="2"/>
+		
+		<mx:SolidColor id="yellowFill" color="#FFFF00"/>
+		<mx:SolidColor id="greenFill" color="#00FF00"/>
+		<mx:SolidColor id="purple" color="#FF00FF" />
+		
+		<!-- X Y 坐标提示 -->
+		<s:Label id="xTips" backgroundColor="red" color="white" paddingBottom="4" paddingLeft="4"
+				 paddingRight="4" paddingTop="4" text="---"/>
+		<s:Label id="yTips" x="10" backgroundColor="red" color="white" paddingBottom="4"
+				 paddingLeft="4" paddingRight="4" paddingTop="4" text="---"/>
+		
+		<mx:CategoryAxis id="x_axis" categoryField="id"/>
+		
+		<mx:AxisRenderer id="x_renderer" axis="{x_axis}" showLabels="false" showLine="false"
+						 tickLength="0" tickPlacement="none"/>
+		
+		<!-- K线数据提示 -->
+		<s:BorderContainer id="tips" y="30" width="80" backgroundAlpha="0.7"
+						   backgroundColor="#CCC6C6" borderColor="#e9e9e9"
+						   mouseDown="{event.currentTarget.startDrag()}"
+						   mouseUp="{event.currentTarget.stopDrag()}"
+						   toolTip="按住鼠标左键可拖动该组件至您认为适合的位置">
+			
+			<s:layout>
+				<s:VerticalLayout/>
+			</s:layout>
+			
+			<s:Label color="white" fontWeight="bold" fontSize="14"	 width="80"  text="时间" paddingLeft="4"/>
+			<s:Label color="yellow"	fontWeight="bold"	 width="80" textAlign="right"   text="{DD.format( new Date(xDate.Date) )}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="开盘" paddingLeft="4"/>
+			<comp:mylabel measureValue="{ _preLastClosePrice.toFixed(2) }"   fontWeight="bold"  width="80" textAlign="right"  text="{xDate.Open.toFixed(2)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold" fontSize="14"	 width="80"  text="最高" paddingLeft="4"/>
+			<comp:mylabel measureValue="{ _preLastClosePrice.toFixed(2) }" 	fontWeight="bold"	 width="80" textAlign="right"   text="{xDate.High.toFixed(2)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="最低" paddingLeft="4"/>
+			<comp:mylabel measureValue="{ _preLastClosePrice.toFixed(2) }"  fontWeight="bold"  width="80" textAlign="right"  text="{xDate.Low.toFixed(2)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold" fontSize="14"	 width="80"  text="收盘" paddingLeft="4"/>
+			<comp:mylabel measureValue="{ _preLastClosePrice.toFixed(2) }" 	fontWeight="bold"	 width="80" textAlign="right"   text="{xDate.Close.toFixed(2)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="成交量" paddingLeft="4"/>
+			<s:Label  color="yellow" fontWeight="bold"  width="80" textAlign="right"  text="{int(xDate.Vol)}" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="成交额" paddingLeft="4"/>
+			<s:Label  color="yellow" fontWeight="bold"  width="80" textAlign="right"  text="{int(xDate.Amount/10000)}万" paddingRight="8"/>
+			
+			<s:Label color="white" fontWeight="bold"	fontSize="14" width="80" 	 text="涨幅" paddingLeft="4"/>
+			<comp:mylabel  fontWeight="bold"  width="80" textAlign="right" text="{(( xDate.Close / _preLastClosePrice - 1 ) * 100).toFixed(2)}%" paddingRight="8"/>
+			
+		</s:BorderContainer>
+		
+		<s:BorderContainer id="intro" width="300" height="201" horizontalCenter="0"
+						   verticalCenter="0">
+			<s:layout>
+				<s:VerticalLayout/>
+			</s:layout>
+			<s:Label color="white" fontSize="16" paddingLeft="5" text="尊敬的客户您好："/>
+			<s:Label color="white" fontSize="13" paddingBottom="5" paddingLeft="36" paddingTop="5"
+					 text="感谢您使用经传辅助决策体验版，如果您想获"/>
+			<s:Label color="#FFFFFF" fontSize="13" paddingBottom="5" paddingTop="5"
+					 text="得更多、更及时的辅助决策功能，请联系："/>
+			<s:Label buttonMode="true"
+					 click="{ navigateToURL(new URLRequest('http://products.jingzhuan.cn/sjad1.html') ) }"
+					 color="#FF0000" fontSize="14" fontWeight="bold" mouseChildren="false"
+					 paddingBottom="5" paddingLeft="36" paddingTop="5" text="当地服务中心（详情可点击查询）"
+					 useHandCursor="true"/>
+			<s:Label color="#FF0000" fontSize="14" fontWeight="bold" paddingBottom="10"
+					 paddingLeft="36" paddingTop="5" text="服务热线：4007003809"/>
+			
+			<s:Button width="300" label="关闭"
+					  click="{
+					  this.removeElement( intro );
+					  myViewStack.visible=false;
+					  myViewStack.includeInLayout=false;
+					  change_ma = true;
+					  this._index = -1;
+					  }"/>
+		</s:BorderContainer>
+		
+		<mx:NumberFormatter id="numberFormatter" precision="2" rounding="up"/>
+		
+	</fx:Declarations>
+	<s:Group id="left_group" width="100%" height="100%" 
+					   mouseMove="left_group_mouseMoveHandler(event)"
+					   mouseOver="left_group_mouseMoveHandler(event)" textAlign="right">
+		<s:Group width="100%" height="100%" >
+			<s:layout>
+				<s:VerticalLayout gap="0" horizontalAlign="right"/>
+			</s:layout>
+			
+			<s:Group width="100%" height="80%">
+				<s:Group y="2" width="100%" height="22" >
+					<s:layout>
+						<s:HorizontalLayout gap="10"/>
+					</s:layout>
+					<!-- 提示 -->
+					<s:Label id="cycle" color="white" fontSize="14" paddingLeft="10"
+							 paddingTop="4" text="日线"/>
+					<s:Label visible="{change_ma}" width="50" color="#575757" fontSize="14"
+							 includeInLayout="{change_ma}" paddingLeft="2" paddingTop="4"
+							 text="{ DW.format( new Date( xDate.Date ) ) } "/>
+					<s:Label visible="{change_ma}" color="#575757" fontSize="14"
+							 includeInLayout="{change_ma}" paddingRight="2" paddingTop="4"
+							 text="MA5：{xDate.Ma5.toFixed(2)}"/>
+					<s:Label visible="{change_ma}" color="#46CBE1" fontSize="14"
+							 includeInLayout="{change_ma}" paddingRight="2" paddingTop="4"
+							 text="MA10：{xDate.Ma10.toFixed(2)}"/>
+					<s:Label visible="{change_ma}" color="#FF00FF" fontSize="14"
+							 includeInLayout="{change_ma}" paddingRight="2" paddingTop="4"
+							 text="MA20：{xDate.Ma20.toFixed(2)}"/>
+					<s:Label visible="{change_ma}" color="#00FF00" fontSize="14"
+							 includeInLayout="{change_ma}" paddingRight="2" paddingTop="4"
+							 text="MA30：{xDate.Ma30.toFixed(2)}"/>
+					<s:Label visible="{!change_ma}" color="yellow" fontSize="14"
+							 includeInLayout="{!change_ma}" paddingRight="2" paddingTop="4"
+							 text="HHJSJDB：{xDate.HHJSJDB.toFixed(2)}"/>
+					<s:Label visible="{!change_ma}" color="red" fontSize="14"
+							 includeInLayout="{!change_ma}" paddingRight="2" paddingTop="4"
+							 text="HHJSJDC：{xDate.HHJSJDC.toFixed(2)}"/>
+				</s:Group>
+				<!--  -->
+				<mx:CandlestickChart id="candlestickchart" width="100%" height="100%"
+									 cacheAsBitmap="true" dataProvider="{_mainData}"
+									 doubleClick="{this.main_line.showCusor();this.setFocus();}"
+									 doubleClickEnabled="true" gutterRight="55" gutterTop="0"
+									 mouseDown="candlestickchart_mouseDownHandler(event)"
+									 showDataTips="false" textAlign="left">
+					<mx:verticalAxis>
+						<comp:MyLinearAxis id="vaxis" baseAtZero="false" maximumLabelPrecision="2"/>
+					</mx:verticalAxis>
+					
+					<mx:verticalAxisRenderers>
+						<mx:AxisRenderer axis="{vaxis}" minorTickLength="0"
+										 minorTickPlacement="none" placement="right" showLine="false"
+										 tickLength="0" tickPlacement="none">
+							<mx:axisStroke>
+								<mx:SolidColorStroke color="red" weight="1"/>
+							</mx:axisStroke>
+						</mx:AxisRenderer>
+					</mx:verticalAxisRenderers>
+					
+					<mx:horizontalAxis>
+						<mx:CategoryAxis id="haxis" categoryField="id"/>
+					</mx:horizontalAxis>
+					
+					<mx:horizontalAxisRenderers>
+						<mx:AxisRenderer axis="{haxis}" placement="top" showLabels="false" showLine="false"
+										 tickLength="0" tickPlacement="none">
+							<mx:axisStroke>
+								<mx:SolidColorStroke color="red" weight="1.5"/>
+							</mx:axisStroke>
+						</mx:AxisRenderer>
+					</mx:horizontalAxisRenderers>
+					<mx:series>
+						<comp:myCandlestickSeries id="main_line" closeField="Close" drawLined="main_line_drawLinedHandler(event)" clearLine="main_line_clearLineHandler(event)"
+												  declineFill="{down}" fill="{up}"
+												  filterData="false" highField="High"
+												  itemRenderer="utils.MyMSeriesRenderer"
+												  lowField="Low" openField="Open"/>
+						<mx:LineSeries visible="{change_ma}" filterData="false"
+									   includeInLayout="false" lineStroke="{line_ma5}"
+									   yField="Ma5"/>
+						<mx:LineSeries visible="{change_ma}" filterData="false" 
+									   includeInLayout="false" lineStroke="{line_ma10}"
+									   yField="Ma10"/>
+						<mx:LineSeries visible="{change_ma}" filterData="false"
+									   includeInLayout="false" lineStroke="{line_ma20}"
+									   yField="Ma20"/>
+						<mx:LineSeries visible="{change_ma}" filterData="false"
+									   includeInLayout="false" lineStroke="{line_ma30}"
+									   yField="Ma30"/>
+						<mx:LineSeries visible="{!change_ma}"
+									   includeInLayout="false" lineStroke="{yellow}"
+									   yField="HHJSJDB"/>
+						<mx:LineSeries visible="{!change_ma}"
+									   includeInLayout="false" lineStroke="{red}"
+									   yField="HHJSJDC"/>
+					</mx:series>
+					<mx:backgroundElements>
+						<!-- 背景虚线 -->
+						<comp:GridLinesEx horizontalStroke="{e9}" alpha="1" />
+						<s:Group>
+							
+						</s:Group>
+						
+						<s:Group>
+							<s:Rect left="0" right="0" top="0" bottom="0" stroke="{e9}" />
+						</s:Group>
+					</mx:backgroundElements>
+					
+				</mx:CandlestickChart>
+			</s:Group>
+			
+			
+			<!-- 成交量 -->
+			<s:Group width="100%" height="20%">
+				<comp:KChart dataProvider="{_mainData}" >
+					<comp:series>
+						<comp:myColumnSeries id="volSeries" fillFunction="fillVol" filterData="false"
+											 yField="Vol"/>
+						<mx:LineSeries filterData="false" includeInLayout="false"
+									   lineStroke="{line_ma5}" yField="Vol5"/>
+						<mx:LineSeries filterData="false" includeInLayout="false"
+									   lineStroke="{line_ma10}" yField="Vol10"/>
+						<mx:LineSeries filterData="false" includeInLayout="false"
+									   lineStroke="{line_ma20}" yField="Vol20"/>
+					</comp:series>
+				</comp:KChart>
+				
+				<s:Group y="2" width="100%" height="12" >
+					<s:layout>
+						<s:HorizontalLayout gap="10"/>
+					</s:layout>
+					<s:Label color="black" paddingLeft="10" text="成交量(手)    {xDate.Vol.toFixed(2)}"/>
+					<s:Label color="#575757" text="5：{xDate.Vol5.toFixed(2)}"/>
+					<s:Label color="#46CBE1" text="10：{xDate.Vol10.toFixed(2)}"/>
+					<s:Label color="#FF00FF" text="20：{xDate.Vol20.toFixed(2)}"/>
+				</s:Group>
+			</s:Group>
+			
+			
+			
+			<mx:ViewStack id="myViewStack" visible="false" width="100%"  height="30%" borderVisible="false" includeInLayout="false"  creationPolicy="auto">
+				<!-- **********************************************主力追踪******************************************************* -->
+				<s:NavigatorContent width="100%" height="100%" >
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					<!-- 主力追踪 -->
+					<s:Group width="100%" height="100%">
+						<comp:KChart dataProvider="{this._data}" >
+							<comp:series>
+								<comp:myLineSeries id="ZLZZ" lineStroke="{s2}" yField="ZLZZ" />
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group width="100%" height="12" >
+							<s:layout>
+								<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="主力追踪 "/>
+							<s:Label color="red" paddingLeft="10" text="{normTips.ZLZZ.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+					
+					
+				</s:NavigatorContent>
+				
+				<!-- ****************************************************中线**************************************************** -->
+				<s:NavigatorContent width="100%" height="100%">
+					
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					<!-- 基金持仓 -->
+					<s:Group id="JJCCContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([SHSLContain]);}">
+						<comp:KChart dataProvider="{this._data1}" >
+							<comp:series>
+								<comp:myColumnSeries id="JJCC" fill="{yellowFill}" yField="JJCC"/>
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group y="2" width="100%" height="12">
+							<s:layout>
+								<s:HorizontalLayout gap="10"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="基金持仓"/>
+							<s:Label color="yellow" paddingLeft="10" text="{normTips.JJCC.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+					
+					<!-- 散户数量 -->
+					<s:Group id="SHSLContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([JJCCContain]);}">
+						<comp:KChart dataProvider="{this._data1}" >
+							<comp:series>
+								<comp:myColumnSeries id="SHSL" fill="{greenFill}" yField="SHSL"/>
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group y="2" width="100%" height="12" >
+							<s:layout>
+								<s:HorizontalLayout gap="10" />
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="散户数量"/>
+							<s:Label color="red" paddingLeft="10" text="{normTips.SHSL.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+					
+				</s:NavigatorContent>
+				
+				<!-- *************************************************趋势*************************************************** -->
+				<s:NavigatorContent width="100%" height="100%" >
+					
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					
+					<!-- 主力控盘 -->
+					<s:Group id="ZLKPContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle( [SSTPContain] );}">
+						<comp:KChart dataProvider="{this._data2}" >
+							<comp:series>
+								<mx:ColumnSeries fillFunction="ZLKPFillFunction" yField="ZLKP"/>
+								<comp:myLineSeries id="ZLKP" lineStroke="{yellow}" yField="ZLKP"/>
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group y="2" width="100%" height="12">
+							<s:layout>
+								<s:HorizontalLayout gap="10"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="主力控盘"/>
+							<s:Label color="yellow" paddingLeft="10" text="{normTips.ZLKP.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+					
+					<!-- 水手突破 -->
+					<s:Group id="SSTPContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle( [ZLKPContain]);}">
+						<comp:KChart dataProvider="{this._data2}" >
+							<comp:series>
+								<mx:CandlestickSeries closeField="Close" fillFunction="SSTP_fill"
+													  declineFill="{SSTP_line}"
+													  fill="{SSTP_line}" highField="High"
+													  itemRenderer="utils.MyMSeriesRenderer_2" lowField="Low" openField="Open"/>
+								<comp:myLineSeries  lineStroke="{line_ma10}" id="SSTP" yField="second_trend"/>
+								<mx:LineSeries  lineStroke="{line_ma5}" yField="third_trend"/>
+								<mx:LineSeries  lineStroke="{line_ma20}" yField="first_trend"/>
+								<mx:LineSeries  lineStroke="{line_ma30}" yField="fouth_trend"/>
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group y="2" width="100%" height="12" >
+							<s:layout>
+								<s:HorizontalLayout gap="10"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="水手突破"/>
+							<s:Label color="#FF00FF" paddingLeft="10"
+									 text="上趋势：{normTips.first_trend.toFixed(2)}"/>
+							<s:Label color="#FFFF00" paddingLeft="10"
+									 text="次上趋势：{normTips.second_trend.toFixed(2)}"/>
+							<s:Label color="#FFFFFF" paddingLeft="10"
+									 text="次下趋势：{normTips.third_trend.toFixed(2)}"/>
+							<s:Label color="#00FF00" paddingLeft="10"
+									 text="下趋势：{normTips.fouth_trend.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+				</s:NavigatorContent>
+				
+				<!-- ***********************************************************主力**************************************************** -->
+				<s:NavigatorContent width="100%" height="100%" >
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					<!-- 主力统计 -->
+					<s:Group id="ZLTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([GFTJContain , SHTJContain ]);}">
+						<comp:KChart dataProvider="{this._data3}" >
+							<comp:series>
+								<comp:myColumnSeries fillFunction="myFillFunction" id="ZLTJ"  yField="ZLTJ" />
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group y="2" width="100%" height="12" >
+							<s:layout>
+								<s:HorizontalLayout gap="10"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="主力统计 "/>
+							<s:Label color="red" paddingLeft="10" text="{normTips.ZLTJ.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+					
+					<!-- 跟风统计 -->
+					<s:Group id="GFTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([ZLTJContain , SHTJContain ]);}">
+						<s:BorderContainer width="100%" height="12" borderVisible="false"
+										   borderWeight="0">
+							<s:layout>
+								<s:HorizontalLayout gap="10" paddingBottom="2" paddingTop="2"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="跟风统计 "/>
+							<s:Label color="red" paddingLeft="10" text="{normTips.GFTJ.toFixed(2)}"/>
+						</s:BorderContainer>
+						
+						<comp:KChart dataProvider="{this._data3}" >
+							<comp:series>
+								<comp:myColumnSeries fillFunction="myFillFunction" id="GFTJ"  yField="GFTJ"/>
+							</comp:series>
+						</comp:KChart>
+					</s:Group>
+					
+					<!-- 散户统计 -->
+					<s:Group id="SHTJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([ZLTJContain , GFTJContain ]);}">
+						<comp:KChart dataProvider="{this._data3}" >
+							<comp:series>
+								<comp:myColumnSeries fillFunction="myFillFunction" id="SHTJ"  yField="SHTJ"/>
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group width="100%" height="12" y="2" >
+							<s:layout>
+								<s:HorizontalLayout gap="10"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="散户统计 "/>
+							<s:Label color="red" paddingLeft="10" text="{normTips.SHTJ.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+					
+				</s:NavigatorContent>
+				
+				<!-- ****************************************************传统指标**************************************************** -->
+				<s:NavigatorContent width="100%" height="100%" >
+					<s:layout>
+						<s:VerticalLayout gap="0"/>
+					</s:layout>
+					<!-- KDJ -->
+					<s:Group id="KDJContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([ MACDContain , RSIContain ]);}" >
+						
+						<s:Group width="100%" height="12" y="2">
+							<s:layout>
+								<s:HorizontalLayout gap="10"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="KDJ "/>
+							<s:Label color="#FFFFFF" fontSize="14" text="K：{normTips.K.toFixed(3)}"/>
+							<s:Label color="#FFFF00" fontSize="14" text="D：{normTips.D.toFixed(3)}"/>
+							<s:Label color="#FF00FF" fontSize="14" text="J：{normTips.J.toFixed(3)}"/>
+						</s:Group>
+						
+						<comp:KChart dataProvider="{this._data4}" >
+							<comp:series>
+								<comp:myLineSeries id="KDJ" lineStroke="{line_ma5}" yField="K"/>
+								<mx:LineSeries  lineStroke="{line_ma10}" yField="D"/>
+								<mx:LineSeries  lineStroke="{line_ma20}" yField="J"/>
+							</comp:series>
+						</comp:KChart>
+
+					</s:Group>
+					
+					<!-- MACD -->
+					<s:Group id="MACDContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([KDJContain , RSIContain ]);}">
+						<comp:KChart dataProvider="{this._data4}" >
+							<comp:series>
+								<mx:ColumnSeries fillFunction="myFillFunction" yField="MACD"/>
+								<comp:myLineSeries id="MACD" lineStroke="{line_ma10}" yField="DIFF"/>
+								<mx:LineSeries lineStroke="{line_ma5}" yField="DEA"/>
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group y="2" width="100%" height="12">
+							<s:layout>
+								<s:HorizontalLayout gap="10"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="MACD "/>
+							<s:Label color="#FFFF00" fontSize="14" text="DIFF：{normTips.DIFF.toFixed(2)}"/>
+							<s:Label color="#FFFFFF" fontSize="14" text="DEA：{normTips.DEA.toFixed(2)}"/>
+							<s:Label color="green" fontSize="14" text="MACD：{normTips.MACD.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+					
+					<!-- RSI -->
+					<s:Group id="RSIContain" width="100%" height="100%" doubleClickEnabled="true" doubleClick="{toggle([KDJContain , MACDContain ]);}" >
+						<comp:KChart dataProvider="{this._data4}" >
+							<comp:series>
+								<comp:myLineSeries id="RSI"  lineStroke="{line_ma5}" yField="RSI1"/>
+								<mx:LineSeries lineStroke="{line_ma10}" yField="RSI2"/>
+								<mx:LineSeries lineStroke="{line_ma20}" yField="RSI3"/>
+							</comp:series>
+						</comp:KChart>
+						
+						<s:Group y="2" width="100%" height="12" >
+							<s:layout>
+								<s:HorizontalLayout gap="10"/>
+							</s:layout>
+							<s:Label color="white" paddingLeft="10" text="RSI "/>
+							<s:Label color="#FFFFFF" fontSize="14" text="RSI1：{normTips.RSI1.toFixed(2)}"/>
+							<s:Label color="#FFFF00" fontSize="14" text="RSI2：{normTips.RSI2.toFixed(2)}"/>
+							<s:Label color="#FF00FF" fontSize="14" text="RSI3：{normTips.RSI3.toFixed(2)}"/>
+						</s:Group>
+					</s:Group>
+				</s:NavigatorContent>
+				
+			</mx:ViewStack>
+			<s:Spacer height="4" />
+			<s:Label width="100%" height="1" backgroundColor="red" text=" "/>
+			<s:Group width="100%" height="22" >
+				<!--
+				<s:ButtonBar change="changeHandler(event)" focusEnabled="false"
+				fontSize="14">
+				<s:layout>
+				<s:HorizontalLayout gap="-1" columnWidth="80" variableColumnWidth="false" />
+				</s:layout>
+				<s:dataProvider>
+				<s:ArrayList source="[主力追踪,中线主力,趋势买卖,至尊数据,传统指标,更多]" />
+				</s:dataProvider>
+				</s:ButtonBar>
+				-->
+				<s:Group fontSize="14" fontWeight="bold" >
+					<s:layout>
+						<s:HorizontalLayout gap="-1" columnWidth="80" variableColumnWidth="false" />
+					</s:layout>
+					<s:Button label="主力追踪" click="changeHandler(event,0)" />
+					<s:Button label="中线主力" click="changeHandler(event,1)"/>
+					<s:Button label="趋势买卖" click="changeHandler(event,2)"/>
+					<s:Button label="至尊数据" click="changeHandler(event,3)" />
+					<s:Button label="传统指标" click="changeHandler(event,4)" />
+					<s:Button label="更多" click="changeHandler(event,5)" />
+				</s:Group>
+				
+			</s:Group>
+		</s:Group>
+	</s:Group>
+	
+</s:Application>
